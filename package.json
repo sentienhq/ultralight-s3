@@ -1,0 +1,41 @@
+{
+  "name": "femtos3",
+  "version": "0.0.1",
+  "description": "A turbo lightweight S3 client that doesn't require anything and anyone.",
+  "main": "./lib/index.min.js",
+  "module": "./lib/index.mjs",
+  "type": "module",
+  "exports": {
+    ".": {
+      "import": "./lib/index.mjs",
+      "require": "./lib/index.min.js"
+    }
+  },
+  "scripts": {
+    "prepublishOnly": "npm run build && npm run build:node && npm run build:browser",
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "esbuild src/index.js --bundle --minify --outfile=lib/index.js",
+    "build:node": "esbuild src/index.js --bundle --minify --outfile=lib/index.mjs --platform=node --format=esm",
+    "build:browser": "esbuild src/index.js --bundle --minify --outfile=lib/femtos3.min.js --platform=browser",
+    "dev:node": "esbuild src/index.js --bundle --outfile=lib/index.js --platform=node",
+    "dev:browser": "esbuild src/index.js --bundle --outfile=lib/femtos3.js --platform=browser",
+    "clean": "rm -rf lib"
+  },
+  "files": [
+    "lib"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sentienhq/femtoS3.js.git"
+  },
+  "keywords": [],
+  "author": "Peter Jensen @ SentienHQ",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/sentienhq/femtoS3.js/issues"
+  },
+  "homepage": "https://github.com/sentienhq/femtoS3.js#readme",
+  "devDependencies": {
+    "esbuild": "^0.21.5"
+  }
+}
