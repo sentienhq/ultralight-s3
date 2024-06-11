@@ -28,6 +28,13 @@
     "type": "git",
     "url": "git+https://github.com/sentienhq/femtoS3.js.git"
   },
+  "jest": {
+    "projects": [
+      "tests/browser.jest.config.js",
+      "tests/node.jest.config.js",
+      "tests/edge.jest.config.js"
+    ]
+  },
   "keywords": [],
   "author": "Peter Jensen @ SentienHQ",
   "license": "MIT",
@@ -36,6 +43,7 @@
   },
   "homepage": "https://github.com/sentienhq/femtoS3.js#readme",
   "devDependencies": {
-    "esbuild": "^0.21.5"
+    "esbuild": "^0.21.5",
+    "jest": "^29.7.0"
   }
 }

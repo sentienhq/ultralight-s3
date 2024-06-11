@@ -1,0 +1,7 @@
+{
+  "name": "node tests",
+  "verbose": true,
+  "collectCoverage": false,
+  "testMatch": ["../**/src/*.node.test.js"],
+  "testEnvironment": "node"
+}

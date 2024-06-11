@@ -1,0 +1,7 @@
+{
+  "name": "browser tests",
+  "verbose": true,
+  "collectCoverage": false,
+  "testMatch": ["../**/src/*.browser.test.js"],
+  "testEnvironment": "jest-environment-puppeteer"
+}
