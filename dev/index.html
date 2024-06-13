@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>FemtoS3.js Dev Index File</title>
+    <link rel="icon" href="data:image/x-icon;base64,iVBORw0KGgo=" />
+  </head>
+  <body>
+    <h1>Welcome dummy</h1>
+    <div id="app"></div>
+    <script type="module" src="./index.js" defer></script>
+    <script type="module" defer>
+      console.log('test2');
+      const configR2 = {
+        endpoint: 'https://bb524cea561a09205de92fae35369ecb.r2.cloudflarestorage.com/openproxy-bucket',
+        region: 'auto',
+        accessKeyId: '94f0224ed42a02cd8e18712ee8dcc733',
+        secretAccessKey: 'f8699597ca952af3198e26527e44f3809391e39607461cc26e0c57151a74d9aa',
+        bucketName: 'openproxy-bucket',
+      };
+      const s3 = new S3(configR2);
+      const s3list = await s3.list();
+      console.log('s3list', s3list);
+    </script>
+  </body>
+</html>
