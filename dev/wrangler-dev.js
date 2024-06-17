@@ -1,19 +1,17 @@
 import { Hono } from 'hono';
-import { serve } from '@hono/node-server';
-import { env } from 'node:process';
+
 import S3 from '../lib/index.js';
+
 const app = new Hono();
 
-console.log('env', env);
-const configCFS3 = {
-  endpoint: env.ENDPOINT,
-  region: env.REGION,
-  accessKeyId: env.ACCESS_KEY_ID,
-  secretAccessKey: env.SECRET_ACCESS_KEY,
-  bucketName: env.BUCKET_NAME,
-};
-
 app.get('/', async c => {
+  const configCFS3 = {
+    endpoint: c.env.ENDPOINT,
+    region: c.env.REGION,
+    accessKeyId: c.env.ACCESS_KEY_ID,
+    secretAccessKey: c.env.SECRET_ACCESS_KEY,
+    bucketName: c.env.BUCKET_NAME,
+  };
   const s3 = new S3(configCFS3);
   const s3list = await s3.list();
   if (s3list[0].key.indexOf('.json') !== -1) {
@@ -24,7 +22,7 @@ app.get('/', async c => {
     s3jsonContent.push(newObj);
     // upload the new json
     const putResponse = await s3.put(s3list[0].key, JSON.stringify(s3jsonContent));
-    // console.log('putResponse', putResponse);
+
     const s3newContent = await s3.get(s3list[0].key);
     const s3newJsonContent = JSON.parse(s3newContent);
     return c.json(s3newJsonContent);
@@ -35,4 +33,4 @@ app.get('/', async c => {
   return c.json(s3list);
 });
 
-serve(app);
+export default app;
