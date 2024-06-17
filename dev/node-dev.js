@@ -3,8 +3,6 @@ import { serve } from '@hono/node-server';
 import { env } from 'node:process';
 import S3 from '../lib/index.js';
 const app = new Hono();
-
-console.log('env', env);
 const configCFS3 = {
   endpoint: env.ENDPOINT,
   region: env.REGION,

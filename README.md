@@ -4,8 +4,8 @@ A turbo lightweight S3 client that doesn't require anything and anyone. Only for
 
 - Works on Node, edge, workers, and browser
 - Supports only essential S3 APIs (list, put, get, delete)
-- (Almost) No dependencies
-- Super lightweight (~1kb gzipped)
+- No dependencies
+- Super lightweight (~5kb gzipped)
 
 ## Installation
 
@@ -21,8 +21,8 @@ yarn add femtos3
 pnpm add femtos3
 
 # or
-
-<script src="https://unpkg.com/femtos3/dist/femtos3.min.js" defer></script>
+# Not yet implemented
+# <script src="https://unpkg.com/femtos3/dist/femtos3.min.js" defer></script>
 ```
 
 ## Usage
