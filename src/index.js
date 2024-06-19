@@ -1,6 +1,16 @@
 'use strict';
+let createHmac = crypto?.createHmac;
+let createHash = crypto?.createHash;
 
-import { createHmac, createHash } from 'node:crypto';
+if (typeof crypto.createHmac === 'undefined' && typeof crypto.createHash === 'undefined') {
+  console.log('crypto is not defined');
+  createHmac = await import('node:crypto').then(m => m.createHmac);
+  createHash = await import('node:crypto').then(m => m.createHash);
+} else {
+  console.log('crypto is defined');
+}
+
+// import { JSONParseStream } from '@worker-tools/json-stream';
 
 const expectArray = {
   contents: true,
@@ -41,6 +51,25 @@ class S3 {
       bucket: this.bucket,
     };
   };
+
+  async getContentLength(key) {
+    const query = {};
+    const headers = {
+      'x-amz-content-sha256': 'UNSIGNED-PAYLOAD',
+    };
+    const { url, headers: signedHeaders } = await this.sign('HEAD', key, query, headers, '');
+    console.log('request: ', url, headers, signedHeaders);
+    const res = await fetch(`${url}`, { method: 'HEAD', headers: signedHeaders });
+
+    if (!res.ok) {
+      const errorBody = await res.text();
+      console.error('Error Body:', errorBody);
+      const errorCode = res.headers.get('x-amz-error-code') || 'Unknown';
+      const errorMessage = res.headers.get('x-amz-error-message') || res.statusText;
+      throw new Error(`HEAD failed with status ${res.status}: ${errorCode} - ${errorMessage}`);
+    }
+    return res.headers.get('content-length');
+  }
 
   async sign(method, path, query, headers, body) {
     const datetime = new Date().toISOString().replace(/[:-]|\.\d{3}/g, '');
@@ -143,8 +172,32 @@ class S3 {
       const errorMessage = res.headers.get('x-amz-error-message') || res.statusText;
       throw new Error(`GET failed with status ${res.status}: ${errorCode} - ${errorMessage}`);
     }
-
     return res.text();
+  }
+
+  async getStream(key, opts, wholeFile = true, part = 0, chunkSizeInB = 1024) {
+    const query = opts || {};
+    const headers = !!wholeFile
+      ? {
+          'Content-Type': 'application/json',
+          'x-amz-content-sha256': 'UNSIGNED-PAYLOAD',
+        }
+      : {
+          'Content-Type': 'application/json',
+          'x-amz-content-sha256': 'UNSIGNED-PAYLOAD',
+          range: `bytes=${part * chunkSizeInB}-${(part + 1) * chunkSizeInB - 1}`,
+        };
+
+    const { url, headers: signedHeaders } = await this.sign('GET', key, query, headers, '');
+    const resp = await fetch(url, { headers: signedHeaders });
+    if (!resp.ok) {
+      const errorBody = await resp.text();
+      console.error('Error Body:', errorBody);
+      const errorCode = resp.headers.get('x-amz-error-code') || 'Unknown';
+      const errorMessage = resp.headers.get('x-amz-error-message') || resp.statusText;
+      throw new Error(`GET failed with status ${resp.status}: ${errorCode} - ${errorMessage}`);
+    }
+    return resp.body;
   }
 
   async put(key, data, opts) {
@@ -162,7 +215,6 @@ class S3 {
       const errorMessage = res.headers.get('x-amz-error-message') || res.statusText;
       throw new Error(`PUT failed with status ${res.status}: ${errorCode} - ${errorMessage}`);
     }
-
     return res;
   }
 
