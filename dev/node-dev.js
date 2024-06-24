@@ -13,6 +13,7 @@ const configCFS3 = {
   accessKeyId: env.ACCESS_KEY_ID,
   secretAccessKey: env.SECRET_ACCESS_KEY,
   bucketName: env.BUCKET_NAME,
+  logger: console,
 };
 
 app.post('/upload', async c => {

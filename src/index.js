@@ -147,7 +147,7 @@ class S3 {
   /**
    * Get the content length of an object.
    * @param {string} key - The key of the object.
-   * @returns {Promise<string>} The content length of the object.
+   * @returns {Promise<number>} The content length of the object in bytes.
    * @throws {TypeError} If the key is not a non-empty string.
    */
   async getContentLength(key) {
@@ -158,7 +158,25 @@ class S3 {
     const headers = { [HEADER_AMZ_CONTENT_SHA256]: UNSIGNED_PAYLOAD };
     const { url, headers: signedHeaders } = await this._sign('HEAD', key, {}, headers, '');
     const res = await this._sendRequest(url, 'HEAD', signedHeaders);
-    return res.headers.get(HEADER_CONTENT_LENGTH);
+    const contentLength = res.headers.get(HEADER_CONTENT_LENGTH);
+    return contentLength ? parseInt(contentLength, 10) : 0;
+  }
+
+  /**
+   * Check if a file exists in the bucket.
+   * @param {string} key - The key of the object.
+   * @returns {Promise<boolean>} True if the file exists, false otherwise.
+   * @throws {TypeError} If the key is not a non-empty string.
+   */
+  async fileExists(key) {
+    if (typeof key !== 'string' || key.trim().length === 0) {
+      this._log('error', 'key must be a non-empty string');
+      throw new TypeError('key must be a non-empty string');
+    }
+    const headers = { [HEADER_AMZ_CONTENT_SHA256]: UNSIGNED_PAYLOAD };
+    const { url, headers: signedHeaders } = await this._sign('HEAD', key, {}, headers, '');
+    const res = await this._sendRequest(url, 'HEAD', signedHeaders);
+    return res.ok;
   }
 
   async _sign(method, path, query, headers, body) {
@@ -395,6 +413,18 @@ class S3 {
    * @throws {TypeError} If any of the parameters are of incorrect type.
    */
   async uploadPart(key, data, uploadId, partNumber, opts = {}) {
+    this._validateUploadPartParams(key, data, uploadId, partNumber, opts);
+    const query = { uploadId, partNumber, ...opts };
+    const headers = { [HEADER_CONTENT_LENGTH]: data.length };
+    const { url, headers: signedHeaders } = await this._sign('PUT', key, query, headers, data);
+    const urlWithQuery = `${url}?${new URLSearchParams(query)}`;
+
+    const res = await this._sendRequest(urlWithQuery, 'PUT', signedHeaders, data);
+    const etag = res.headers.get('etag');
+    return { etag, partNumber };
+  }
+
+  _validateUploadPartParams(key, data, uploadId, partNumber, opts) {
     if (typeof key !== 'string' || key.trim().length === 0) {
       throw new TypeError('key must be a non-empty string');
     }
@@ -410,14 +440,6 @@ class S3 {
     if (typeof opts !== 'object') {
       throw new TypeError('opts must be an object');
     }
-    const query = { uploadId, partNumber, ...opts };
-    const headers = { [HEADER_CONTENT_LENGTH]: data.length };
-    const { url, headers: signedHeaders } = await this._sign('PUT', key, query, headers, data);
-    const urlWithQuery = `${url}?${new URLSearchParams(query)}`;
-
-    const res = await this._sendRequest(urlWithQuery, 'PUT', signedHeaders, data);
-    const etag = res.headers.get('etag');
-    return { etag, partNumber };
   }
 
   /**
