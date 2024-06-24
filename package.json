@@ -31,9 +31,7 @@
   },
   "jest": {
     "projects": [
-      "tests/browser.jest.config.js",
-      "tests/node.jest.config.js",
-      "tests/edge.jest.config.js"
+      "tests/node.jest.config.js"
     ]
   },
   "keywords": [],

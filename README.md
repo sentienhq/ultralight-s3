@@ -1,11 +1,11 @@
-# femto-S3
+# femtos3
 
 A turbo lightweight S3 client that doesn't require anything and anyone. Only for the thick-skinned personalities.
 
-- Works on Node, edge, workers, and browser
-- Supports only essential S3 APIs (list, put, get, delete)
+- Works on Node, edge, workers, lambda, and browser (NOT IMEPLEMENTED YET)
+- Supports only essential S3 APIs (list, put (single and multipart), get (single and stream), delete, etc...)
 - No dependencies
-- Super lightweight (~5kb gzipped)
+- Super lightweight (~12kb minified)
 
 ## Installation
 
