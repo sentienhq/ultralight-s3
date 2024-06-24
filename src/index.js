@@ -3,7 +3,9 @@ const _createHmac = crypto.createHmac || (await import('node:crypto').then(m => 
 const _createHash = crypto.createHash || (await import('node:crypto').then(m => m.createHash));
 
 if (typeof _createHmac === 'undefined' && typeof _createHash === 'undefined') {
-  console.error('Crypto functions are not available, please report this issue');
+  console.error(
+    'FemtoS3 Module: Crypto functions are not available, please report the issue with necessary description: https://github.com/sentienhq/femtoS3.js/issues',
+  );
 }
 
 // Constants
@@ -15,6 +17,8 @@ const UNSIGNED_PAYLOAD = 'UNSIGNED-PAYLOAD';
 const DEFAULT_STREAM_CONTENT_TYPE = 'application/octet-stream';
 const XML_CONTENT_TYPE = 'application/xml';
 const JSON_CONTENT_TYPE = 'application/json';
+// List of keys that might contain sensitive information
+const SENSITIVE_KEYS_REDACTED = ['accessKeyId', 'secretAccessKey', 'sessionToken', 'password'];
 
 // Headers
 const HEADER_AMZ_CONTENT_SHA256 = 'x-amz-content-sha256';
@@ -23,6 +27,23 @@ const HEADER_HOST = 'host';
 const HEADER_AUTHORIZATION = 'Authorization';
 const HEADER_CONTENT_TYPE = 'Content-Type';
 const HEADER_CONTENT_LENGTH = 'Content-Length';
+const HEADER_ETAG = 'etag';
+const HEADER_LAST_MODIFIED = 'last-modified';
+
+// Error messages
+const ERROR_PREFIX = 'FemtoS3 Module: ';
+const ERROR_ACCESS_KEY_REQUIRED = `${ERROR_PREFIX}accessKeyId must be a non-empty string`;
+const ERROR_SECRET_KEY_REQUIRED = `${ERROR_PREFIX}secretAccessKey must be a non-empty string`;
+const ERROR_ENDPOINT_REQUIRED = `${ERROR_PREFIX}endpoint must be a non-empty string`;
+const ERROR_BUCKET_NAME_REQUIRED = `${ERROR_PREFIX}bucketName must be a non-empty string`;
+const ERROR_KEY_REQUIRED = `${ERROR_PREFIX}key must be a non-empty string`;
+const ERROR_UPLOAD_ID_REQUIRED = `${ERROR_PREFIX}uploadId must be a non-empty string`;
+const ERROR_PARTS_REQUIRED = `${ERROR_PREFIX}parts must be a non-empty array`;
+const ERROR_INVALID_PART = `${ERROR_PREFIX}Each part must have a PartNumber (number) and ETag (string)`;
+const ERROR_DATA_BUFFER_REQUIRED = `${ERROR_PREFIX}data must be a Buffer or string`;
+const ERROR_PATH_REQUIRED = `${ERROR_PREFIX}path must be a string`;
+const ERROR_PREFIX_TYPE = `${ERROR_PREFIX}prefix must be a string`;
+const ERROR_MAX_KEYS_TYPE = `${ERROR_PREFIX}maxKeys must be a positive integer`;
 
 const expectArray = {
   contents: true,
@@ -72,13 +93,13 @@ class S3 {
     accessKeyId,
     secretAccessKey,
     endpoint,
-    bucketName = '',
+    bucketName,
     region = 'auto',
     maxRequestSizeInBytes = 5 * 1024 * 1024,
     requestAbortTimeout = undefined,
     logger = null,
   }) {
-    this._validateConstructorParams(accessKeyId, secretAccessKey, endpoint);
+    this._validateConstructorParams(accessKeyId, secretAccessKey, endpoint, bucketName);
     this.accessKeyId = accessKeyId;
     this.secretAccessKey = secretAccessKey;
     this.endpoint = endpoint;
@@ -89,24 +110,65 @@ class S3 {
     this.logger = logger;
   }
 
-  _validateConstructorParams(accessKeyId, secretAccessKey, endpoint) {
-    if (typeof accessKeyId !== 'string' || accessKeyId.length === 0)
-      throw new TypeError('accessKeyId must be a non-empty string');
-    if (typeof secretAccessKey !== 'string' || secretAccessKey.length === 0)
-      throw new TypeError('secretAccessKey must be a non-empty string');
-    if (typeof endpoint !== 'string' || endpoint.length === 0)
-      throw new TypeError('endpoint must be a non-empty string');
+  _validateConstructorParams(accessKeyId, secretAccessKey, endpoint, bucketName) {
+    if (typeof accessKeyId !== 'string' || accessKeyId.trim().length === 0)
+      throw new TypeError(ERROR_ACCESS_KEY_REQUIRED);
+    if (typeof secretAccessKey !== 'string' || secretAccessKey.trim().length === 0)
+      throw new TypeError(ERROR_SECRET_KEY_REQUIRED);
+    if (typeof endpoint !== 'string' || endpoint.trim().length === 0) throw new TypeError(ERROR_ENDPOINT_REQUIRED);
+    if (typeof bucketName !== 'string' || bucketName.trim().length === 0)
+      throw new TypeError(ERROR_BUCKET_NAME_REQUIRED);
   }
 
   /**
-   * Internal method to log messages.
+   * Internal method to log messages with sanitized sensitive information.
    * @param {string} level - The log level (e.g., 'info', 'warn', 'error').
    * @param {string} message - The message to log.
+   * @param {Object} [additionalData={}] - Additional data to include in the log.
    * @private
    */
-  _log(level, message) {
+  _log(level, message, additionalData = {}) {
     if (this.logger && typeof this.logger[level] === 'function') {
-      this.logger[level](message);
+      // Function to recursively sanitize an object
+      const sanitize = obj => {
+        if (typeof obj !== 'object' || obj === null) {
+          return obj;
+        }
+        return Object.keys(obj).reduce(
+          (acc, key) => {
+            if (SENSITIVE_KEYS_REDACTED.includes(key.toLowerCase())) {
+              acc[key] = '[REDACTED]';
+            } else if (typeof obj[key] === 'object' && obj[key] !== null) {
+              acc[key] = sanitize(obj[key]);
+            } else {
+              acc[key] = obj[key];
+            }
+            return acc;
+          },
+          Array.isArray(obj) ? [] : {},
+        );
+      };
+
+      // Sanitize the additional data
+      const sanitizedData = sanitize(additionalData);
+      // Prepare the log entry
+      const logEntry = {
+        timestamp: new Date().toISOString(),
+        level,
+        message,
+        ...sanitizedData,
+        // Include some general context, but sanitize sensitive parts
+        context: sanitize({
+          bucketName: this.bucketName,
+          region: this.region,
+          endpoint: this.endpoint,
+          // Only include the first few characters of the access key, if it exists
+          accessKeyId: this.accessKeyId ? `${this.accessKeyId.substring(0, 4)}...` : undefined,
+        }),
+      };
+
+      // Log the sanitized entry
+      this.logger[level](logEntry);
     }
   }
 
@@ -132,6 +194,10 @@ class S3 {
     secretAccessKey: this.secretAccessKey,
     region: this.region,
     bucket: this.bucketName,
+    endpoint: this.endpoint,
+    maxRequestSizeInBytes: this.maxRequestSizeInBytes,
+    requestAbortTimeout: this.requestAbortTimeout,
+    logger: this.logger,
   });
   setProps = props => {
     this._validateConstructorParams(props.accessKeyId, props.secretAccessKey, props.endpoint);
@@ -142,6 +208,7 @@ class S3 {
     this.endpoint = props.endpoint;
     this.maxRequestSizeInBytes = props.maxRequestSizeInBytes;
     this.requestAbortTimeout = props.requestAbortTimeout;
+    this.logger = props.logger;
   };
 
   /**
@@ -152,8 +219,8 @@ class S3 {
    */
   async getContentLength(key) {
     if (typeof key !== 'string' || key.trim().length === 0) {
-      this._log('error', 'key must be a non-empty string');
-      throw new TypeError('key must be a non-empty string');
+      this._log('error', ERROR_KEY_REQUIRED);
+      throw new TypeError(ERROR_KEY_REQUIRED);
     }
     const headers = { [HEADER_AMZ_CONTENT_SHA256]: UNSIGNED_PAYLOAD };
     const { url, headers: signedHeaders } = await this._sign('HEAD', key, {}, headers, '');
@@ -170,8 +237,8 @@ class S3 {
    */
   async fileExists(key) {
     if (typeof key !== 'string' || key.trim().length === 0) {
-      this._log('error', 'key must be a non-empty string');
-      throw new TypeError('key must be a non-empty string');
+      this._log('error', ERROR_KEY_REQUIRED);
+      throw new TypeError(ERROR_KEY_REQUIRED);
     }
     const headers = { [HEADER_AMZ_CONTENT_SHA256]: UNSIGNED_PAYLOAD };
     const { url, headers: signedHeaders } = await this._sign('HEAD', key, {}, headers, '');
@@ -260,19 +327,24 @@ class S3 {
    */
   async list(path = '/', prefix = '', maxKeys = 1000, method = 'GET', opts = {}) {
     if (typeof path !== 'string' || path.trim().length === 0) {
-      throw new TypeError('path must be a string');
+      this._log('error', ERROR_PATH_REQUIRED);
+      throw new TypeError(ERROR_PATH_REQUIRED);
     }
     if (typeof prefix !== 'string') {
-      throw new TypeError('prefix must be a string');
+      this._log('error', ERROR_PREFIX_TYPE);
+      throw new TypeError(ERROR_PREFIX_TYPE);
     }
     if (!Number.isInteger(maxKeys) || maxKeys <= 0) {
-      throw new TypeError('maxKeys must be a positive integer');
+      this._log('error', ERROR_MAX_KEYS_TYPE);
+      throw new TypeError(ERROR_MAX_KEYS_TYPE);
     }
     if (method !== 'GET' && method !== 'HEAD') {
-      throw new TypeError('method must be either GET or HEAD');
+      this._log('error', `${ERROR_PREFIX}method must be either GET or HEAD`);
+      throw new TypeError(`${ERROR_PREFIX}method must be either GET or HEAD`);
     }
     if (typeof opts !== 'object') {
-      throw new TypeError('opts must be an object');
+      this._log('error', `${ERROR_PREFIX}opts must be an object`);
+      throw new TypeError(`${ERROR_PREFIX}opts must be an object`);
     }
     const query = {
       'list-type': LIST_TYPE,
@@ -291,9 +363,9 @@ class S3 {
 
     if (method === 'HEAD') {
       return {
-        size: +res.headers[HEADER_CONTENT_LENGTH],
-        mtime: new Date(res.headers['last-modified']),
-        etag: res.headers.etag,
+        size: +res.headers.get(HEADER_CONTENT_LENGTH),
+        mtime: new Date(res.headers.get(HEADER_LAST_MODIFIED)),
+        etag: res.headers.get(HEADER_ETAG),
       };
     }
 
@@ -351,10 +423,12 @@ class S3 {
    */
   async put(key, data) {
     if (typeof key !== 'string' || key.trim().length === 0) {
-      throw new TypeError('key must be a non-empty string');
+      this._log('error', ERROR_KEY_REQUIRED);
+      throw new TypeError(ERROR_KEY_REQUIRED);
     }
     if (!(data instanceof Buffer || typeof data === 'string')) {
-      throw new TypeError('data must be a Buffer or string');
+      this._log('error', ERROR_DATA_BUFFER_REQUIRED);
+      throw new TypeError(ERROR_DATA_BUFFER_REQUIRED);
     }
     const headers = { [HEADER_CONTENT_LENGTH]: data.length };
     const { url, headers: signedHeaders } = await this._sign('PUT', key, {}, headers, data);
@@ -373,10 +447,12 @@ class S3 {
    */
   async getMultipartUploadId(key, fileType = DEFAULT_STREAM_CONTENT_TYPE) {
     if (typeof key !== 'string' || key.trim().length === 0) {
-      throw new TypeError('key must be a non-empty string');
+      this._log('error', ERROR_KEY_REQUIRED);
+      throw new TypeError(ERROR_KEY_REQUIRED);
     }
     if (typeof fileType !== 'string') {
-      throw new TypeError('fileType must be a string');
+      this._log('error', `${ERROR_PREFIX}fileType must be a string`);
+      throw new TypeError(`${ERROR_PREFIX}fileType must be a string`);
     }
     const query = { uploads: '' };
     const headers = {
@@ -392,11 +468,13 @@ class S3 {
     const parsedResponse = _parseXml(responseBody);
 
     if (parsedResponse.error) {
-      throw new Error(`Failed to create multipart upload: ${parsedResponse.error.message}`);
+      this._log('error', `${ERROR_PREFIX}Failed to create multipart upload: ${parsedResponse.error.message}`);
+      throw new Error(`${ERROR_PREFIX}Failed to create multipart upload: ${parsedResponse.error.message}`);
     }
 
     if (!parsedResponse.initiateMultipartUploadResult || !parsedResponse.initiateMultipartUploadResult.uploadId) {
-      throw new Error('Failed to create multipart upload: Missing upload ID in response');
+      this._log('error', `${ERROR_PREFIX}Failed to create multipart upload: no uploadId in response`);
+      throw new Error(`${ERROR_PREFIX}Failed to create multipart upload: Missing upload ID in response`);
     }
 
     return parsedResponse.initiateMultipartUploadResult.uploadId;
@@ -426,19 +504,24 @@ class S3 {
 
   _validateUploadPartParams(key, data, uploadId, partNumber, opts) {
     if (typeof key !== 'string' || key.trim().length === 0) {
-      throw new TypeError('key must be a non-empty string');
+      this._log('error', ERROR_KEY_REQUIRED);
+      throw new TypeError(ERROR_KEY_REQUIRED);
     }
     if (!(data instanceof Buffer || typeof data === 'string')) {
-      throw new TypeError('data must be a Buffer or string');
+      this._log('error', ERROR_DATA_BUFFER_REQUIRED);
+      throw new TypeError(ERROR_DATA_BUFFER_REQUIRED);
     }
     if (typeof uploadId !== 'string' || uploadId.trim().length === 0) {
-      throw new TypeError('uploadId must be a non-empty string');
+      this._log('error', ERROR_UPLOAD_ID_REQUIRED);
+      throw new TypeError(ERROR_UPLOAD_ID_REQUIRED);
     }
     if (!Number.isInteger(partNumber) || partNumber <= 0) {
-      throw new TypeError('partNumber must be a positive integer');
+      this._log('error', `${ERROR_PREFIX}partNumber must be a positive integer`);
+      throw new TypeError(`${ERROR_PREFIX}partNumber must be a positive integer`);
     }
     if (typeof opts !== 'object') {
-      throw new TypeError('opts must be an object');
+      this._log('error', `${ERROR_PREFIX}opts must be an object`);
+      throw new TypeError(`${ERROR_PREFIX}opts must be an object`);
     }
   }
 
@@ -453,16 +536,20 @@ class S3 {
    */
   async completeMultipartUpload(key, uploadId, parts) {
     if (typeof key !== 'string' || key.trim().length === 0) {
-      throw new TypeError('key must be a non-empty string');
+      this._log('error', ERROR_KEY_REQUIRED);
+      throw new TypeError(ERROR_KEY_REQUIRED);
     }
     if (typeof uploadId !== 'string' || uploadId.trim().length === 0) {
-      throw new TypeError('uploadId must be a non-empty string');
+      this._log('error', ERROR_UPLOAD_ID_REQUIRED);
+      throw new TypeError(ERROR_UPLOAD_ID_REQUIRED);
     }
     if (!Array.isArray(parts) || parts.length === 0) {
-      throw new TypeError('parts must be a non-empty array');
+      this._log('error', ERROR_PARTS_REQUIRED);
+      throw new TypeError(ERROR_PARTS_REQUIRED);
     }
     if (!parts.every(part => typeof part.PartNumber === 'number' && typeof part.ETag === 'string')) {
-      throw new TypeError('Each part must have a PartNumber (number) and ETag (string)');
+      this._log('error', ERROR_INVALID_PART);
+      throw new TypeError(ERROR_INVALID_PART);
     }
     const query = { uploadId };
     const xmlBody = this._buildCompleteMultipartUploadXml(parts);
@@ -480,7 +567,8 @@ class S3 {
     const parsedResponse = _parseXml(responseBody);
 
     if (parsedResponse.error) {
-      throw new Error(`Failed to complete multipart upload: ${parsedResponse.error.message}`);
+      this._log('error', `${ERROR_PREFIX}Failed to complete multipart upload: ${parsedResponse.error.message}`);
+      throw new Error(`${ERROR_PREFIX}Failed to complete multipart upload: ${parsedResponse.error.message}`);
     }
 
     return parsedResponse.completeMultipartUploadResult;
@@ -496,12 +584,12 @@ class S3 {
   async abortMultipartUpload(key, uploadId) {
     // Input validation
     if (typeof key !== 'string' || key.trim().length === 0) {
-      this._log('error', 'key must be a non-empty string');
-      throw new TypeError('key must be a non-empty string');
+      this._log('error', ERROR_KEY_REQUIRED);
+      throw new TypeError(ERROR_KEY_REQUIRED);
     }
     if (typeof uploadId !== 'string' || uploadId.trim().length === 0) {
-      this._log('error', 'uploadId must be a non-empty string');
-      throw new TypeError('uploadId must be a non-empty string');
+      this._log('error', ERROR_UPLOAD_ID_REQUIRED);
+      throw new TypeError(ERROR_UPLOAD_ID_REQUIRED);
     }
 
     // Prepare the request
@@ -524,8 +612,8 @@ class S3 {
         const parsedResponse = _parseXml(responseBody);
 
         if (parsedResponse.error) {
-          this._log('error', `Failed to abort multipart upload: ${parsedResponse.error.message}`);
-          throw new Error(`Failed to abort multipart upload: ${parsedResponse.error.message}`);
+          this._log('error', `${ERROR_PREFIX}Failed to abort multipart upload: ${parsedResponse.error.message}`);
+          throw new Error(`${ERROR_PREFIX}Failed to abort multipart upload: ${parsedResponse.error.message}`);
         }
 
         return {
@@ -535,12 +623,12 @@ class S3 {
           response: parsedResponse,
         };
       } else {
-        this._log('error', `Abort request failed with status ${res.status}`);
-        throw new Error(`Abort request failed with status ${res.status}`);
+        this._log('error', `${ERROR_PREFIX}Abort request failed with status ${res.status}`);
+        throw new Error(`${ERROR_PREFIX}Abort request failed with status ${res.status}`);
       }
     } catch (error) {
-      this._log('error', 'Error aborting multipart upload:' + error);
-      throw new Error(`Failed to abort multipart upload for key ${key}: ${error.message}`);
+      this._log('error', `${ERROR_PREFIX}Failed to abort multipart upload for key ${key}: ${error.message}`);
+      throw new Error(`${ERROR_PREFIX}Failed to abort multipart upload for key ${key}: ${error.message}`);
     }
   }
 
@@ -591,8 +679,13 @@ class S3 {
     const errorBody = await res.text();
     const errorCode = res.headers.get('x-amz-error-code') || 'Unknown';
     const errorMessage = res.headers.get('x-amz-error-message') || res.statusText;
-    this._log('error', `Request failed: ${errorBody}`);
-    throw new Error(`Request failed with status ${res.status}: ${errorCode} - ${errorMessage}`);
+    this._log(
+      'error',
+      `${ERROR_PREFIX}Request failed with status ${res.status}: ${errorCode} - ${errorMessage},err body: ${errorBody}`,
+    );
+    throw new Error(
+      `${ERROR_PREFIX}Request failed with status ${res.status}: ${errorCode} - ${errorMessage}, err body: ${errorBody}`,
+    );
   }
 
   _buildCanonicalQueryString(queryParams) {
