@@ -1,13 +1,11 @@
 'use strict';
-let createHmac = crypto?.createHmac;
-let createHash = crypto?.createHash;
+const createHmac = crypto.createHmac || (await import('node:crypto').then(m => m.createHmac));
+const createHash = crypto.createHash || (await import('node:crypto').then(m => m.createHash));
 
-if (typeof crypto.createHmac === 'undefined' && typeof crypto.createHash === 'undefined') {
-  console.log('crypto is not defined');
-  createHmac = await import('node:crypto').then(m => m.createHmac);
-  createHash = await import('node:crypto').then(m => m.createHash);
-} else {
-  console.log('crypto is defined');
+const randomUUID = crypto.randomUUID || (await import('node:crypto').then(m => m.randomUUID));
+
+if (typeof createHmac === 'undefined' && typeof createHash === 'undefined') {
+  console.log('crypto is defined, we got problem');
 }
 
 // import { JSONParseStream } from '@worker-tools/json-stream';
@@ -17,7 +15,14 @@ const expectArray = {
 };
 
 class S3 {
-  constructor({ accessKeyId, secretAccessKey, endpoint, bucketName = '', region = 'auto' }) {
+  constructor({
+    accessKeyId,
+    secretAccessKey,
+    endpoint,
+    bucketName = '',
+    region = 'auto',
+    maxRequstSizeInBytes = 5 * 1024 * 1024,
+  }) {
     if (typeof accessKeyId !== 'string' || accessKeyId.length === 0)
       throw new TypeError('accessKeyId must be a non-empty string');
     if (typeof secretAccessKey !== 'string' || secretAccessKey.length === 0)
@@ -29,6 +34,7 @@ class S3 {
     this.endpoint = endpoint;
     this.bucketName = bucketName;
     this.region = region;
+    this.maxRequstSizeInBytes = maxRequstSizeInBytes;
   }
 
   getBucketName = () => {
@@ -50,6 +56,10 @@ class S3 {
       region: this.region,
       bucket: this.bucket,
     };
+  };
+
+  getMaxRequstSizeInBytes = () => {
+    return this.maxRequstSizeInBytes;
   };
 
   async getContentLength(key) {
@@ -114,10 +124,12 @@ class S3 {
     };
   }
 
-  async list(path = '/', prefix = '', maxKeys = 1000, method = 'GET') {
+  // todo - create list iterator and pagination
+  async list(path = '/', prefix = '', maxKeys = 1000, method = 'GET', opts) {
     const query = {
       'list-type': '2',
       'max-keys': String(maxKeys),
+      ...opts,
     };
     const headers = {
       'Content-Type': 'application/json',
@@ -175,8 +187,11 @@ class S3 {
     return res.text();
   }
 
-  async getStream(key, opts, wholeFile = true, part = 0, chunkSizeInB = 1024) {
-    const query = opts || {};
+  async getStream(key, wholeFile = true, part = 0, chunkSizeInB = this.maxRequstSizeInBytes, opts = {}) {
+    const query = {
+      partNumber: part,
+      ...opts,
+    };
     const headers = !!wholeFile
       ? {
           'Content-Type': 'application/json',
@@ -189,7 +204,9 @@ class S3 {
         };
 
     const { url, headers: signedHeaders } = await this.sign('GET', key, query, headers, '');
-    const resp = await fetch(url, { headers: signedHeaders });
+    const searchParams = new URLSearchParams(query);
+    const urlWithQuery = `${url}?${searchParams.toString()}`;
+    const resp = await fetch(urlWithQuery, { headers: signedHeaders });
     if (!resp.ok) {
       const errorBody = await resp.text();
       console.error('Error Body:', errorBody);
@@ -200,8 +217,8 @@ class S3 {
     return resp.body;
   }
 
-  async put(key, data, opts) {
-    const query = opts || {};
+  async put(key, data) {
+    const query = {};
     const headers = {
       'Content-Length': data.length,
     };
@@ -218,8 +235,127 @@ class S3 {
     return res;
   }
 
-  async delete(path, opts) {
-    const query = opts || {};
+  async getMultipartUploadId(key, fileType = 'application/octet-stream') {
+    const query = {
+      uploads: '',
+    };
+    const headers = {
+      'Content-Type': fileType,
+      'x-amz-content-sha256': 'UNSIGNED-PAYLOAD',
+    };
+
+    const { url, headers: signedHeaders } = await this.sign('POST', key, query, headers, '');
+    const searchParams = new URLSearchParams(query);
+    const urlWithQuery = `${url}?${searchParams.toString()}`;
+    const res = await fetch(urlWithQuery, {
+      method: 'POST',
+      headers: signedHeaders,
+    });
+
+    if (!res.ok) {
+      const errorBody = await res.text();
+      console.error('Error Body:', errorBody);
+      const errorCode = res.headers.get('x-amz-error-code') || 'Unknown';
+      const errorMessage = res.headers.get('x-amz-error-message') || res.statusText;
+      throw new Error(`Create Multipart Upload failed with status ${res.status}: ${errorCode} - ${errorMessage}`);
+    }
+
+    const responseBody = await res.text();
+    const parsedResponse = parseXml(responseBody);
+
+    if (parsedResponse.error) {
+      throw new Error(`Failed to create multipart upload: ${parsedResponse.error.message}`);
+    }
+
+    if (!parsedResponse.initiateMultipartUploadResult || !parsedResponse.initiateMultipartUploadResult.uploadId) {
+      throw new Error('Failed to create multipart upload');
+    }
+
+    return parsedResponse.initiateMultipartUploadResult.uploadId;
+  }
+
+  async uploadPart(key, data, uploadId, partNumber, opts = {}) {
+    const query = {
+      uploadId,
+      partNumber,
+      ...opts,
+    };
+    console.log('partNumber', partNumber);
+    const headers = {
+      'Content-Length': data.length,
+    };
+    const { url, headers: signedHeaders } = await this.sign('PUT', key, query, headers, data);
+    const searchParams = new URLSearchParams(query);
+    const urlWithQuery = `${url}?${searchParams.toString()}`;
+    const res = await fetch(urlWithQuery, { method: 'PUT', headers: signedHeaders, body: data });
+
+    if (!res.ok) {
+      const errorBody = await res.text();
+      console.error('Error Body:', errorBody);
+      const errorCode = res.headers.get('x-amz-error-code') || 'Unknown';
+      const errorMessage = res.headers.get('x-amz-error-message') || res.statusText;
+      throw new Error(`PUT failed with status ${res.status}: ${errorCode} - ${errorMessage}`);
+    }
+    const etag = res.headers.get('etag');
+    return {
+      etag,
+      partNumber,
+    };
+  }
+
+  async completeMultipartUpload(key, uploadId, parts) {
+    const query = { uploadId };
+    console.log('parts', parts);
+    const xmlBody = `
+      <CompleteMultipartUpload>
+        ${parts
+          .map(
+            part => `
+          <Part>
+            <PartNumber>${part.PartNumber}</PartNumber>
+            <ETag>${part.ETag}</ETag>
+          </Part>
+        `,
+          )
+          .join('')}
+      </CompleteMultipartUpload>
+    `;
+    console.log('xmlBody', xmlBody);
+    const headers = {
+      'Content-Type': 'application/xml',
+      'Content-Length': Buffer.byteLength(xmlBody).toString(),
+      'x-amz-content-sha256': await hash(xmlBody),
+    };
+
+    const { url, headers: signedHeaders } = await this.sign('POST', key, query, headers, xmlBody);
+    const searchParams = new URLSearchParams(query);
+    const urlWithQuery = `${url}?${searchParams.toString()}`;
+    const res = await fetch(urlWithQuery, {
+      method: 'POST',
+      headers: signedHeaders,
+      body: xmlBody,
+    });
+
+    if (!res.ok) {
+      const errorBody = await res.text();
+      console.error('Error Body:', errorBody);
+      const errorCode = res.headers.get('x-amz-error-code') || 'Unknown';
+      const errorMessage = res.headers.get('x-amz-error-message') || res.statusText;
+      throw new Error(`Complete Multipart Upload failed with status ${res.status}: ${errorCode} - ${errorMessage}`);
+    }
+
+    const responseBody = await res.text();
+    const parsedResponse = parseXml(responseBody);
+
+    if (parsedResponse.error) {
+      throw new Error(`Failed to complete multipart upload: ${parsedResponse.error.message}`);
+    }
+
+    return parsedResponse.completeMultipartUploadResult;
+  }
+
+  async delete(path) {
+    const query = {};
     const headers = {};
     const { url, headers: signedHeaders } = await this.sign('DELETE', path, query, headers, '');
     const res = await fetch(url, { method: 'DELETE', headers: signedHeaders });

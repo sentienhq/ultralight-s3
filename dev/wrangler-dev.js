@@ -1,11 +1,11 @@
 import { Hono } from 'hono';
-import avro from 'avro-js';
+// import avro from 'avro-js';
 
 import S3 from '../lib/index.js';
 
 const app = new Hono();
 console.log('Worker is running!');
-console.log('avro', avro);
+
 app.get('/', async c => {
   const configCFS3 = {
     endpoint: c.env.ENDPOINT,
@@ -19,18 +19,18 @@ app.get('/', async c => {
   const collected = [];
 
   // const jsonStream = s3.getStream(s3list[0].key).body;
-  await (await s3.getStream(s3list[0].key)).pipeThrough(new JSONParseStream('$.*')).pipeTo(
-    new WritableStream({
-      write(obj) {
-        collected.push(obj);
-      },
-    }),
-  );
+  // await (await s3.getStream(s3list[0].key)).pipeThrough(new JSONParseStream('$.*')).pipeTo(
+  //   new WritableStream({
+  //     write(obj) {
+  //       collected.push(obj);
+  //     },
+  //   }),
+  // );
   // console.log('Collected objects:', collected);
   // const s3Test = await s3.get({
   // 	path: 's3-test.txt',
   // });
-  return c.json(collected);
+  return c.json(s3list);
 });
 
 export default app;
