@@ -21,7 +21,7 @@ app.post('/upload', async c => {
   const file = body['filename'];
 
   if (file && file instanceof File) {
-    const maxFileSizeInB = s3.getMaxRequstSizeInBytes();
+    const maxFileSizeInB = s3.getMaxRequestSizeInBytes();
     const chunkSize = maxFileSizeInB; // Use max request size as chunk size
     const fileBuffer = Buffer.from(await file.arrayBuffer());
 
