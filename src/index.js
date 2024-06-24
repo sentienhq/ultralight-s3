@@ -390,6 +390,62 @@ class S3 {
   }
 
   /**
+   * List multipart uploads in the bucket.
+   * @param {string} [path='/'] - The path to list objects from.
+   * @param {string} [prefix=''] - The prefix to filter objects.
+   * @param {string} [method='GET'] - The HTTP method to use (GET or HEAD).
+   * @param {Object} [opts={}] - Additional options for the list operation.
+   * @returns {Promise<Object|Array>} The list of objects or object metadata.
+   * @throws {TypeError} If any of the parameters are of incorrect type.
+   */
+  async listMultiPartUploads(path = '/', prefix = '', method = 'GET', opts = {}) {
+    if (typeof path !== 'string' || path.trim().length === 0) {
+      this._log('error', ERROR_PATH_REQUIRED);
+      throw new TypeError(ERROR_PATH_REQUIRED);
+    }
+    if (typeof prefix !== 'string') {
+      this._log('error', ERROR_PREFIX_TYPE);
+      throw new TypeError(ERROR_PREFIX_TYPE);
+    }
+    if (method !== 'GET' && method !== 'HEAD') {
+      this._log('error', `${ERROR_PREFIX}method must be either GET or HEAD`);
+      throw new TypeError(`${ERROR_PREFIX}method must be either GET or HEAD`);
+    }
+    if (typeof opts !== 'object') {
+      this._log('error', `${ERROR_PREFIX}opts must be an object`);
+      throw new TypeError(`${ERROR_PREFIX}opts must be an object`);
+    }
+
+    this._log('info', `Listing multipart uploads in ${path}`);
+
+    const query = {
+      uploads: '',
+      ...opts,
+    };
+    const headers = {
+      [HEADER_CONTENT_TYPE]: JSON_CONTENT_TYPE,
+      [HEADER_AMZ_CONTENT_SHA256]: UNSIGNED_PAYLOAD,
+    };
+    const encodedKey = encodeURI(path);
+    const { url, headers: signedHeaders } = await this._sign('GET', encodedKey, query, headers, '');
+    const urlWithQuery = `${url}?${new URLSearchParams(query)}`;
+    const res = await this._sendRequest(urlWithQuery, 'GET', signedHeaders);
+    const responseBody = await res.text();
+
+    if (method === 'HEAD') {
+      return {
+        size: +res.headers.get(HEADER_CONTENT_LENGTH),
+        mtime: new Date(res.headers.get(HEADER_LAST_MODIFIED)),
+        etag: res.headers.get(HEADER_ETAG),
+      };
+    }
+
+    const data = _parseXml(responseBody);
+    const output = data.listMultipartUploadsResult || data.error || data;
+    return output.uploads || output;
+  }
+
+  /**
    * Get an object from the bucket.
    * @param {string} key - The key of the object to get.
    * @param {Object} [opts={}] - Additional options for the get operation.
@@ -401,7 +457,8 @@ class S3 {
       [HEADER_AMZ_CONTENT_SHA256]: UNSIGNED_PAYLOAD,
     };
     this._log('info', `Getting object ${key}`);
-    const { url, headers: signedHeaders } = await this._sign('GET', key, opts, headers, '');
+    const encodedKey = encodeURI(key);
+    const { url, headers: signedHeaders } = await this._sign('GET', encodedKey, opts, headers, '');
     const res = await this._sendRequest(url, 'GET', signedHeaders);
     return res.text();
   }
@@ -422,8 +479,8 @@ class S3 {
       [HEADER_AMZ_CONTENT_SHA256]: UNSIGNED_PAYLOAD,
       ...(wholeFile ? {} : { range: `bytes=${part * chunkSizeInB}-${(part + 1) * chunkSizeInB - 1}` }),
     };
-
-    const { url, headers: signedHeaders } = await this._sign('GET', key, query, headers, '');
+    const encodedKey = encodeURI(key);
+    const { url, headers: signedHeaders } = await this._sign('GET', encodedKey, query, headers, '');
     const urlWithQuery = `${url}?${new URLSearchParams(query)}`;
 
     const res = await this._sendRequest(urlWithQuery, 'GET', signedHeaders);
