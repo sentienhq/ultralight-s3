@@ -130,3 +130,7 @@ dist
 .pnp.*
 .wrangler
 wrangler.toml
+
+
+tests/data/.minio.sys/
+
