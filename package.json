@@ -16,10 +16,8 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "build": "esbuild src/index.js --bundle --platform=node --minify  --sourcemap --outfile=lib/index.js",
     "build:node": "esbuild src/index.js --bundle --minify  --sourcemap --outfile=lib/index.js --platform=node --format=esm",
-    "build:browser": "esbuild src/index.js --bundle --minify  --sourcemap --outfile=lib/femtos3.min.js --platform=browser",
     "dev:wrangler": "wrangler dev --port 8787",
-    "dev:node": "esbuild src/index.js --bundle --outfile=lib/index.js --platform=node --format=esm --watch & nodemon --w './src/*.js' --exec 'node  --max-old-space-size=4096 --env-file ./.env ./dev/node-dev.js'",
-    "dev:browser": "esbuild src/index.js --bundle --platform=browser --outdir=dev --watch --servedir=dev",
+    "dev:node": "esbuild src/index.js --bundle --outfile=lib/index.js --platform=node --format=esm --watch=forever & nodemon --w './src/*.js' --exec 'node  --max-old-space-size=4096 --env-file ./.env ./dev/node-dev.js'",
     "clean": "rm -rf lib"
   },
   "files": [

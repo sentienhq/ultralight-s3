@@ -103,6 +103,22 @@ app.post('/upload', async c => {
   return c.json({ error: 'No file provided' });
 });
 
+app.get('/del-all', async c => {
+  const s3 = new S3(configCFS3);
+  const s3list = await s3.list();
+  if (s3list.length === 0) {
+    return c.json({ success: true, message: 'No objects to delete' });
+  }
+  for (const file of s3list) {
+    console.log('Deleting', file.key);
+    const resp = await s3.delete(file.key);
+    console.log('resp', resp);
+    const fileExist = await s3.fileExists(file.key);
+    console.log('fileExist', fileExist);
+  }
+  return c.json({ success: true });
+});
+
 app.get('/', async c => {
   const s3 = new S3(configCFS3);
   const s3list = await s3.list();

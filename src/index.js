@@ -61,7 +61,7 @@ const expectArray = {
  *   secretAccessKey: 'your-secret-key',
  *   endpoint: 'https://your-s3-endpoint.com',
  *   bucketName: 'your-bucket-name',
- *   region: 'us-east-1'
+ *   region: 'us-east-1' // by default is auto
  * });
  *
  * // Upload a file
@@ -84,8 +84,8 @@ class S3 {
    * @param {string} config.endpoint - The endpoint URL of the S3-compatible service.
    * @param {string} [config.bucketName=''] - The name of the bucket to operate on.
    * @param {string} [config.region='auto'] - The region of the S3 service.
-   * @param {number} [config.maxRequestSizeInBytes=5242880] - The maximum size of a single request in bytes (default is 5MB).
-   * @param {number} [config.requestAbortTimeout=undefined] - The timeout in milliseconds after which a request should be aborted.
+   * @param {number} [config.maxRequestSizeInBytes=5242880] - The maximum size of a single request in bytes (minimum for AWS S3 is 5MB).
+   * @param {number} [config.requestAbortTimeout=undefined] - The timeout in milliseconds after which a request should be aborted (careful on streamed requests).
    * @param {Object} [config.logger=null] - A logger object with methods like info, warn, error.
    * @throws {TypeError} Will throw an error if required parameters are missing or of incorrect type.
    */
@@ -222,8 +222,11 @@ class S3 {
       this._log('error', ERROR_KEY_REQUIRED);
       throw new TypeError(ERROR_KEY_REQUIRED);
     }
-    const headers = { [HEADER_AMZ_CONTENT_SHA256]: UNSIGNED_PAYLOAD };
-    const { url, headers: signedHeaders } = await this._sign('HEAD', key, {}, headers, '');
+    const headers = {
+      [HEADER_AMZ_CONTENT_SHA256]: UNSIGNED_PAYLOAD,
+    };
+    const encodedKey = encodeURI(key);
+    const { url, headers: signedHeaders } = await this._sign('HEAD', encodedKey, {}, headers, '');
     const res = await this._sendRequest(url, 'HEAD', signedHeaders);
     const contentLength = res.headers.get(HEADER_CONTENT_LENGTH);
     return contentLength ? parseInt(contentLength, 10) : 0;
@@ -241,15 +244,26 @@ class S3 {
       throw new TypeError(ERROR_KEY_REQUIRED);
     }
     const headers = { [HEADER_AMZ_CONTENT_SHA256]: UNSIGNED_PAYLOAD };
-    const { url, headers: signedHeaders } = await this._sign('HEAD', key, {}, headers, '');
-    const res = await this._sendRequest(url, 'HEAD', signedHeaders);
-    return res.ok;
+    const encodedKey = encodeURI(key);
+    const { url, headers: signedHeaders } = await this._sign('HEAD', encodedKey, {}, headers, '');
+    try {
+      const res = await fetch(url, {
+        method: 'HEAD',
+        headers: signedHeaders,
+      });
+      if (res.ok && res.status === 200) return true;
+      else if (res.status === 404) return false;
+      else this._handleErrorResponse(res);
+    } catch (error) {
+      this._log('error', `${ERROR_PREFIX}Failed to check if file exists: ${error.message}`);
+      throw new Error(`${ERROR_PREFIX}Failed to check if file exists: ${error.message}`);
+    }
   }
 
-  async _sign(method, path, query, headers, body) {
+  async _sign(method, keyPath, query, headers, body) {
     const datetime = new Date().toISOString().replace(/[:-]|\.\d{3}/g, '');
-    const url = new URL(path, this.endpoint);
-    url.pathname = `/${encodeURIComponent(this.bucketName)}${url.pathname}`;
+    const url = new URL(keyPath, this.endpoint);
+    url.pathname = `/${encodeURI(this.bucketName)}${url.pathname}`;
 
     const canonicalHeaders = this._buildCanonicalHeaders(headers);
     const signedHeaders = Object.keys(headers)
@@ -267,9 +281,7 @@ class S3 {
     );
     const stringToSign = await this._buildStringToSign(datetime, canonicalRequest);
     const signature = await this._calculateSignature(datetime, stringToSign);
-
     const authorizationHeader = this._buildAuthorizationHeader(datetime, signedHeaders, signature);
-
     headers[HEADER_AUTHORIZATION] = authorizationHeader;
     headers[HEADER_AMZ_CONTENT_SHA256] = body ? await _hash(body) : UNSIGNED_PAYLOAD;
     headers[HEADER_AMZ_DATE] = datetime;
@@ -288,7 +300,7 @@ class S3 {
   async _buildCanonicalRequest(method, url, query, canonicalHeaders, signedHeaders, body) {
     return [
       method,
-      encodeURI(url.pathname),
+      url.pathname,
       this._buildCanonicalQueryString(query),
       `${canonicalHeaders}\n`,
       signedHeaders,
@@ -346,6 +358,9 @@ class S3 {
       this._log('error', `${ERROR_PREFIX}opts must be an object`);
       throw new TypeError(`${ERROR_PREFIX}opts must be an object`);
     }
+
+    this._log('info', `Listing objects in ${path}`);
+
     const query = {
       'list-type': LIST_TYPE,
       'max-keys': String(maxKeys),
@@ -355,9 +370,9 @@ class S3 {
       [HEADER_CONTENT_TYPE]: JSON_CONTENT_TYPE,
       [HEADER_AMZ_CONTENT_SHA256]: UNSIGNED_PAYLOAD,
     };
-    const { url, headers: signedHeaders } = await this._sign('GET', path, query, headers, '');
+    const encodedKey = encodeURI(path);
+    const { url, headers: signedHeaders } = await this._sign('GET', encodedKey, query, headers, '');
     const urlWithQuery = `${url}?${new URLSearchParams(query)}`;
-
     const res = await this._sendRequest(urlWithQuery, 'GET', signedHeaders);
     const responseBody = await res.text();
 
@@ -385,6 +400,7 @@ class S3 {
       [HEADER_CONTENT_TYPE]: JSON_CONTENT_TYPE,
       [HEADER_AMZ_CONTENT_SHA256]: UNSIGNED_PAYLOAD,
     };
+    this._log('info', `Getting object ${key}`);
     const { url, headers: signedHeaders } = await this._sign('GET', key, opts, headers, '');
     const res = await this._sendRequest(url, 'GET', signedHeaders);
     return res.text();
@@ -430,9 +446,13 @@ class S3 {
       this._log('error', ERROR_DATA_BUFFER_REQUIRED);
       throw new TypeError(ERROR_DATA_BUFFER_REQUIRED);
     }
-    const headers = { [HEADER_CONTENT_LENGTH]: data.length };
-    const { url, headers: signedHeaders } = await this._sign('PUT', key, {}, headers, data);
-
+    // const encodedKey = encodeURIComponent(key);
+    this._log('info', `Uploading object ${key}`);
+    const headers = {
+      [HEADER_CONTENT_LENGTH]: data.length,
+    };
+    const encodedKey = encodeURI(key);
+    const { url, headers: signedHeaders } = await this._sign('PUT', encodedKey, {}, headers, data);
     const res = await this._sendRequest(url, 'PUT', signedHeaders, data);
     return res;
   }
@@ -454,13 +474,15 @@ class S3 {
       this._log('error', `${ERROR_PREFIX}fileType must be a string`);
       throw new TypeError(`${ERROR_PREFIX}fileType must be a string`);
     }
+    this._log('info', `Initiating multipart upload for object ${key}`);
     const query = { uploads: '' };
     const headers = {
       [HEADER_CONTENT_TYPE]: fileType,
       [HEADER_AMZ_CONTENT_SHA256]: UNSIGNED_PAYLOAD,
     };
 
-    const { url, headers: signedHeaders } = await this._sign('POST', key, query, headers, '');
+    const encodedKey = encodeURI(key);
+    const { url, headers: signedHeaders } = await this._sign('POST', encodedKey, query, headers, '');
     const urlWithQuery = `${url}?${new URLSearchParams(query)}`;
 
     const res = await this._sendRequest(urlWithQuery, 'POST', signedHeaders);
@@ -493,8 +515,11 @@ class S3 {
   async uploadPart(key, data, uploadId, partNumber, opts = {}) {
     this._validateUploadPartParams(key, data, uploadId, partNumber, opts);
     const query = { uploadId, partNumber, ...opts };
-    const headers = { [HEADER_CONTENT_LENGTH]: data.length };
-    const { url, headers: signedHeaders } = await this._sign('PUT', key, query, headers, data);
+    const headers = {
+      [HEADER_CONTENT_LENGTH]: data.length,
+    };
+    const encodedKey = encodeURI(key);
+    const { url, headers: signedHeaders } = await this._sign('PUT', encodedKey, query, headers, data);
     const urlWithQuery = `${url}?${new URLSearchParams(query)}`;
 
     const res = await this._sendRequest(urlWithQuery, 'PUT', signedHeaders, data);
@@ -551,6 +576,7 @@ class S3 {
       this._log('error', ERROR_INVALID_PART);
       throw new TypeError(ERROR_INVALID_PART);
     }
+    this._log('info', `Complete multipart upload ${uploadId} for object ${key}`);
     const query = { uploadId };
     const xmlBody = this._buildCompleteMultipartUploadXml(parts);
     const headers = {
@@ -558,8 +584,8 @@ class S3 {
       [HEADER_CONTENT_LENGTH]: Buffer.byteLength(xmlBody).toString(),
       [HEADER_AMZ_CONTENT_SHA256]: await _hash(xmlBody),
     };
-
-    const { url, headers: signedHeaders } = await this._sign('POST', key, query, headers, xmlBody);
+    const encodedKey = encodeURI(key);
+    const { url, headers: signedHeaders } = await this._sign('POST', encodedKey, query, headers, xmlBody);
     const urlWithQuery = `${url}?${new URLSearchParams(query)}`;
 
     const res = await this._sendRequest(urlWithQuery, 'POST', signedHeaders, xmlBody);
@@ -592,6 +618,8 @@ class S3 {
       throw new TypeError(ERROR_UPLOAD_ID_REQUIRED);
     }
 
+    this._log('info', `Aborting multipart upload ${uploadId} for object ${key}`);
+
     // Prepare the request
     const query = { uploadId };
     const headers = {
@@ -601,7 +629,8 @@ class S3 {
 
     try {
       // Sign and send the request
-      const { url, headers: signedHeaders } = await this._sign('DELETE', key, query, headers, '');
+      const encodedKey = encodeURI(key);
+      const { url, headers: signedHeaders } = await this._sign('DELETE', encodedKey, query, headers, '');
       const urlWithQuery = `${url}?${new URLSearchParams(query)}`;
 
       const res = await this._sendRequest(urlWithQuery, 'DELETE', signedHeaders);
@@ -651,16 +680,27 @@ class S3 {
 
   /**
    * Delete an object from the bucket.
-   * @param {string} path - The key of the object to delete.
+   * @param {string} key - The key of the object to delete.
    * @returns {Promise<Object>} The response from the delete operation.
    */
-  async delete(path) {
-    const { url, headers: signedHeaders } = await this._sign('DELETE', path, {}, {}, '');
+  async delete(key) {
+    if (typeof key !== 'string' || key.trim().length === 0) {
+      this._log('error', ERROR_KEY_REQUIRED);
+      throw new TypeError(ERROR_KEY_REQUIRED);
+    }
+    this._log('info', `Deleting object ${key}`);
+    const headers = {
+      [HEADER_CONTENT_TYPE]: JSON_CONTENT_TYPE,
+      [HEADER_AMZ_CONTENT_SHA256]: UNSIGNED_PAYLOAD,
+    };
+    const encodedKey = encodeURI(key);
+    const { url, headers: signedHeaders } = await this._sign('DELETE', encodedKey, {}, headers, '');
     const res = await this._sendRequest(url, 'DELETE', signedHeaders);
-    return res.json();
+    return res.text();
   }
 
   async _sendRequest(url, method, headers, body = null) {
+    this._log('info', `Sending ${method} request to ${url}, headers: ${headers}`);
     const res = await fetch(url, {
       method,
       headers,
