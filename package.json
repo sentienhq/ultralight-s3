@@ -1,5 +1,5 @@
 {
-  "name": "femtoS3",
+  "name": "femto-s3",
   "version": "0.0.1",
   "description": "A turbo lightweight S3 client that doesn't require anything and anyone.",
   "main": "./lib/index.js",
@@ -11,12 +11,12 @@
     }
   },
   "scripts": {
-    "prepublishOnly": "npm run build && npm run build:node && npm run build:browser",
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "prepublishOnly": "npm run build && npm run build:node",
     "build": "esbuild src/index.js --bundle --platform=node --minify  --sourcemap --outfile=lib/index.js",
     "build:node": "esbuild src/index.js --bundle --minify  --sourcemap --outfile=lib/index.js --platform=node --format=esm",
     "dev:wrangler": "wrangler dev --port 8787",
     "dev:node": "esbuild src/index.js --bundle --outfile=lib/index.js --platform=node --format=esm --watch=forever & nodemon --w './src/*.js' --exec 'node  --max-old-space-size=4096 --env-file ./.env ./dev/node-dev.js'",
+    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js --config node.jest.config.json --no-cache",
     "clean": "rm -rf lib"
   },
   "files": [
@@ -40,10 +40,10 @@
   "homepage": "https://github.com/sentienhq/femtoS3.js#readme",
   "devDependencies": {
     "@hono/node-server": "^1.11.2",
-    "docker-compose": "^0.24.8",
     "esbuild": "^0.21.5",
     "hono": "^4.4.5",
     "jest": "^29.7.0",
+    "minio": "^8.0.1",
     "nodemon": "^3.1.3"
   }
 }

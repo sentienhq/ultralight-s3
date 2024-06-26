@@ -146,6 +146,47 @@ app.get('/delete-upload/:key', async c => {
   c.json({ message: 'Upload not found' });
 });
 
+app.get('/make-folder/:folder', async c => {
+  const s3 = new S3(configCFS3);
+  const folderName = c.req.param('folder');
+  const resp = await s3.put(folderName + '/', '');
+  console.log('resp', resp);
+  return c.json({ success: true, message: 'Folder created successfully' });
+});
+
+app.get('get/:key', async c => {
+  const s3 = new S3(configCFS3);
+  const key = c.req.param('key');
+  console.log('key', key);
+  const resp = await s3.get(key);
+  console.log('resp', resp);
+  return c.json(resp);
+});
+
+app.get('get/:dir/:key', async c => {
+  const s3 = new S3(configCFS3);
+  const key = c.req.param('key');
+  const dir = c.req.param('dir');
+  console.log('key', key);
+  console.log('dir', dir);
+  const resp = await s3.get(dir + '/' + key);
+  return c.json('ok');
+});
+
+app.get('list/:prefix', async c => {
+  const s3 = new S3(configCFS3);
+  const prefix = c.req.param('prefix');
+  const resp = await s3.list('/', prefix + '/');
+  return c.json(resp);
+});
+
+app.get('/bucket-exists/:bucketName', async c => {
+  const s3 = new S3(configCFS3);
+  // const bucketName = c.req.param('bucketName');
+  const exists = await s3.bucketExists();
+  return c.json({ success: true, message: 'Bucket exists', exists });
+});
+
 app.get('/', async c => {
   const s3 = new S3(configCFS3);
   const s3list = await s3.list();

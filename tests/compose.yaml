@@ -1,4 +1,3 @@
-version: '3'
 services:
   minio:
     image: quay.io/minio/minio:RELEASE.2024-06-06T09-36-42Z
@@ -7,9 +6,12 @@ services:
     ports:
       - 9000:9000
       - 9001:9001
+    restart: always
     environment:
       MINIO_ROOT_USER: 'minio_user'
       MINIO_ROOT_PASSWORD: 'minio_password'
       MINIO_ADDRESS: ':9000'
       MINIO_CONSOLE_ADDRESS: ':9001'
+      MINIO_ACCESS_KEY: 'AKIAIOSFODNN7EXAMPLE'
+      MINIO_SECRET_KEY: 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY'
     command: minio server /data

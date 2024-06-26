@@ -1,0 +1,10 @@
+{
+  "displayName": "femtoS3 node tests",
+  "testTimeout": 60000,
+  "verbose": true,
+  "testEnvironment": "node",
+  "setupFilesAfterEnv": ["<rootDir>/tests/setup.js"],
+  "globalSetup": "./tests/setup.js",
+  "globalTeardown": "./tests/teardown.js",
+  "testMatch": ["<rootDir>/tests/*.test.js"]
+}

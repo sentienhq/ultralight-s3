@@ -1,4 +1,4 @@
-# femtos3
+# femto-s3
 
 A turbo lightweight S3 client that doesn't require anything and anyone. Only for the thick-skinned personalities.
 
@@ -10,25 +10,25 @@ A turbo lightweight S3 client that doesn't require anything and anyone. Only for
 ## Installation
 
 ```bash
-npm install femtos3
+npm install femto-s3
 
 # or
 
-yarn add femtos3
+yarn add femto-s3
 
 # or
 
-pnpm add femtos3
+pnpm add femto-s3
 
 # or
 # Not yet implemented
-# <script src="https://unpkg.com/femtos3/dist/femtos3.min.js" defer></script>
+# <script src="https://unpkg.com/femtos3/dist/femto-s3.min.js" defer></script>
 ```
 
 ## Usage
 
 ```js
-import { S3 } from 'femtos3';
+import { S3 } from 'femto-s3';
 
 const s3 = new S3({
   accessKeyId: 'your-access-key-id',
