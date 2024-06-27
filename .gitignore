@@ -134,3 +134,4 @@ wrangler.toml
 
 tests/data/.minio.sys/
 
+tests/data

@@ -49,6 +49,14 @@ const expectArray = {
   contents: true,
 };
 
+const encodeAsHex = c => `%${c.charCodeAt(0).toString(16).toUpperCase()}`;
+function uriEscape(uriStr) {
+  return encodeURIComponent(uriStr).replace(/[!'()*]/g, encodeAsHex);
+}
+function uriResourceEscape(string) {
+  return uriEscape(string).replace(/%2F/g, '/');
+}
+
 /**
  * S3 class for interacting with S3-compatible object storage services.
  * This class provides methods for common S3 operations such as uploading, downloading,
@@ -225,7 +233,7 @@ class S3 {
     const headers = {
       [HEADER_AMZ_CONTENT_SHA256]: UNSIGNED_PAYLOAD,
     };
-    const encodedKey = encodeURI(key);
+    const encodedKey = uriResourceEscape(key);
     const { url, headers: signedHeaders } = await this._sign('HEAD', encodedKey, {}, headers, '');
     const res = await this._sendRequest(url, 'HEAD', signedHeaders);
     const contentLength = res.headers.get(HEADER_CONTENT_LENGTH);
@@ -278,7 +286,7 @@ class S3 {
       throw new TypeError(ERROR_KEY_REQUIRED);
     }
     const headers = { [HEADER_AMZ_CONTENT_SHA256]: UNSIGNED_PAYLOAD };
-    const encodedKey = encodeURI(key);
+    const encodedKey = uriResourceEscape(key);
     const { url, headers: signedHeaders } = await this._sign('HEAD', encodedKey, {}, headers, '');
     try {
       const res = await fetch(url, {
@@ -405,7 +413,7 @@ class S3 {
       [HEADER_CONTENT_TYPE]: JSON_CONTENT_TYPE,
       [HEADER_AMZ_CONTENT_SHA256]: UNSIGNED_PAYLOAD,
     };
-    const encodedKey = encodeURI(path);
+    const encodedKey = path === '/' ? path : uriEscape(path);
     const { url, headers: signedHeaders } = await this._sign('GET', encodedKey, query, headers, '');
     const urlWithQuery = `${url}?${new URLSearchParams(query)}`;
     const res = await this._sendRequest(urlWithQuery, 'GET', signedHeaders);
@@ -461,7 +469,7 @@ class S3 {
       [HEADER_CONTENT_TYPE]: JSON_CONTENT_TYPE,
       [HEADER_AMZ_CONTENT_SHA256]: UNSIGNED_PAYLOAD,
     };
-    const encodedKey = encodeURI(path);
+    const encodedKey = path === '/' ? path : uriEscape(path);
     const { url, headers: signedHeaders } = await this._sign('GET', encodedKey, query, headers, '');
     const urlWithQuery = `${url}?${new URLSearchParams(query)}`;
     const res = await this._sendRequest(urlWithQuery, 'GET', signedHeaders);
@@ -492,7 +500,7 @@ class S3 {
       [HEADER_AMZ_CONTENT_SHA256]: UNSIGNED_PAYLOAD,
     };
     this._log('info', `Getting object ${key}`);
-    const encodedKey = encodeURI(key);
+    const encodedKey = uriResourceEscape(key);
     const { url, headers: signedHeaders } = await this._sign('GET', encodedKey, opts, headers, '');
     const res = await this._sendRequest(url, 'GET', signedHeaders);
     return res.text();
@@ -514,7 +522,7 @@ class S3 {
       [HEADER_AMZ_CONTENT_SHA256]: UNSIGNED_PAYLOAD,
       ...(wholeFile ? {} : { range: `bytes=${part * chunkSizeInB}-${(part + 1) * chunkSizeInB - 1}` }),
     };
-    const encodedKey = encodeURI(key);
+    const encodedKey = uriResourceEscape(key);
     const { url, headers: signedHeaders } = await this._sign('GET', encodedKey, query, headers, '');
     const urlWithQuery = `${url}?${new URLSearchParams(query)}`;
 
@@ -540,10 +548,11 @@ class S3 {
     }
     // const encodedKey = encodeURIComponent(key);
     this._log('info', `Uploading object ${key}`);
+    const contentLength = typeof data === 'string' ? Buffer.byteLength(data) : data.length;
     const headers = {
-      [HEADER_CONTENT_LENGTH]: data.length,
+      [HEADER_CONTENT_LENGTH]: contentLength,
     };
-    const encodedKey = encodeURI(key);
+    const encodedKey = uriResourceEscape(key);
     const { url, headers: signedHeaders } = await this._sign('PUT', encodedKey, {}, headers, data);
     const res = await this._sendRequest(url, 'PUT', signedHeaders, data);
     return res;
@@ -573,7 +582,7 @@ class S3 {
       [HEADER_AMZ_CONTENT_SHA256]: UNSIGNED_PAYLOAD,
     };
 
-    const encodedKey = encodeURI(key);
+    const encodedKey = uriResourceEscape(key);
     const { url, headers: signedHeaders } = await this._sign('POST', encodedKey, query, headers, '');
     const urlWithQuery = `${url}?${new URLSearchParams(query)}`;
 
@@ -610,7 +619,7 @@ class S3 {
     const headers = {
       [HEADER_CONTENT_LENGTH]: data.length,
     };
-    const encodedKey = encodeURI(key);
+    const encodedKey = uriResourceEscape(key);
     const { url, headers: signedHeaders } = await this._sign('PUT', encodedKey, query, headers, data);
     const urlWithQuery = `${url}?${new URLSearchParams(query)}`;
 
@@ -676,7 +685,7 @@ class S3 {
       [HEADER_CONTENT_LENGTH]: Buffer.byteLength(xmlBody).toString(),
       [HEADER_AMZ_CONTENT_SHA256]: await _hash(xmlBody),
     };
-    const encodedKey = encodeURI(key);
+    const encodedKey = uriResourceEscape(key);
     const { url, headers: signedHeaders } = await this._sign('POST', encodedKey, query, headers, xmlBody);
     const urlWithQuery = `${url}?${new URLSearchParams(query)}`;
 
@@ -721,7 +730,7 @@ class S3 {
 
     try {
       // Sign and send the request
-      const encodedKey = encodeURI(key);
+      const encodedKey = uriResourceEscape(key);
       const { url, headers: signedHeaders } = await this._sign('DELETE', encodedKey, query, headers, '');
       const urlWithQuery = `${url}?${new URLSearchParams(query)}`;
 
@@ -785,7 +794,7 @@ class S3 {
       [HEADER_CONTENT_TYPE]: JSON_CONTENT_TYPE,
       [HEADER_AMZ_CONTENT_SHA256]: UNSIGNED_PAYLOAD,
     };
-    const encodedKey = encodeURI(key);
+    const encodedKey = uriResourceEscape(key);
     const { url, headers: signedHeaders } = await this._sign('DELETE', encodedKey, {}, headers, '');
     const res = await this._sendRequest(url, 'DELETE', signedHeaders);
     return res.text();
