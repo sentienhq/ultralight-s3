@@ -1,6 +1,6 @@
 'use strict';
 
-import { S3 } from '../lib/index.js';
+import { S3 } from '../lib/index.min.js';
 import * as Minio from 'minio';
 import { randomBytes } from 'crypto';
 import stream from 'stream';
@@ -162,9 +162,9 @@ describe('S3 class', () => {
     ]);
 
     const result = await s3.completeMultipartUpload(key, uploadId, [
-      { PartNumber: 1, ETag: upload1.etag },
-      { PartNumber: 2, ETag: upload2.etag },
-      { PartNumber: 3, ETag: upload3.etag },
+      { partNumber: 1, ETag: upload1.ETag },
+      { partNumber: 2, ETag: upload2.ETag },
+      { partNumber: 3, ETag: upload3.ETag },
     ]);
 
     expect(result).toBeTruthy();
@@ -241,8 +241,6 @@ describe('S3 class', () => {
     const content = 'Content with special characters: áéíóú';
     const mPut = await minioClient.putObject(testConfigR2.bucketName, key, content);
     const mStat = await minioClient.statObject(testConfigR2.bucketName, key);
-    console.log('mStat', mStat);
-    console.log('mPut', mPut);
     const minioContent = await new Promise((resolve, reject) => {
       let data = '';
       minioClient.getObject(testConfigR2.bucketName, key, (err, dataStream) => {
@@ -253,7 +251,8 @@ describe('S3 class', () => {
       });
     });
     expect(minioContent).toBe(content);
-    console.log('::: minioContent', minioContent);
+    await minioClient.removeObject(testConfigR2.bucketName, key);
+
     await s3.put(key, content);
     const contentLength = await s3.getContentLength(key);
     expect(contentLength).toBe(Buffer.byteLength(content));
@@ -343,9 +342,9 @@ describe('S3 class', () => {
     ]);
 
     const result = await s3.completeMultipartUpload(key, uploadId, [
-      { PartNumber: 1, ETag: upload1.etag },
-      { PartNumber: 2, ETag: upload2.etag },
-      { PartNumber: 3, ETag: upload3.etag },
+      { partNumber: 1, ETag: upload1.ETag },
+      { partNumber: 2, ETag: upload2.ETag },
+      { partNumber: 3, ETag: upload3.ETag },
     ]);
 
     expect(result).toBeTruthy();

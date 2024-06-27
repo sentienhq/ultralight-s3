@@ -161,7 +161,7 @@ declare class S3 {
      * @returns {Promise<Object|Array>} The list of objects or object metadata.
      * @throws {TypeError} If any of the parameters are of incorrect type.
      */
-    listMultiPartUploads(path?: string, prefix?: string, method?: string, opts?: {}): Promise<any>;
+    listMultiPartUploads(path?: string, prefix?: string, method?: HttpMethod, opts?: Object): Promise<any>;
     /**
      * Get an object from the bucket.
      * @param {string} key - The key of the object to get.

@@ -91,7 +91,7 @@ const ERROR_BUCKET_NAME_REQUIRED = `${ERROR_PREFIX}bucketName must be a non-empt
 const ERROR_KEY_REQUIRED = `${ERROR_PREFIX}key must be a non-empty string`;
 const ERROR_UPLOAD_ID_REQUIRED = `${ERROR_PREFIX}uploadId must be a non-empty string`;
 const ERROR_PARTS_REQUIRED = `${ERROR_PREFIX}parts must be a non-empty array`;
-const ERROR_INVALID_PART = `${ERROR_PREFIX}Each part must have a PartNumber (number) and ETag (string)`;
+const ERROR_INVALID_PART = `${ERROR_PREFIX}Each part must have a partNumber (number) and ETag (string)`;
 const ERROR_DATA_BUFFER_REQUIRED = `${ERROR_PREFIX}data must be a Buffer or string`;
 const ERROR_PATH_REQUIRED = `${ERROR_PREFIX}path must be a string`;
 const ERROR_PREFIX_TYPE = `${ERROR_PREFIX}prefix must be a string`;
@@ -203,7 +203,11 @@ class S3 {
    * @param {Object} [additionalData={}] - Additional data to include in the log.
    * @private
    */
-  private _log(level: 'info' | 'warn' | 'error', message: string, additionalData: Record<string, any> = {}): void {
+  private _log(
+    level: 'info' | 'warn' | 'error',
+    message: string,
+    additionalData: Record<string, any> | string = {},
+  ): void {
     if (this.logger && typeof this.logger[level] === 'function') {
       // Function to recursively sanitize an object
       const sanitize = (obj: any): any => {
@@ -520,7 +524,7 @@ class S3 {
       return {
         size: contentLength ? +contentLength : undefined,
         mtime: lastModified ? new Date(lastModified) : undefined,
-        etag: etag || undefined,
+        ETag: etag || undefined,
       };
     }
 
@@ -538,7 +542,12 @@ class S3 {
    * @returns {Promise<Object|Array>} The list of objects or object metadata.
    * @throws {TypeError} If any of the parameters are of incorrect type.
    */
-  async listMultiPartUploads(path = '/', prefix = '', method = 'GET', opts = {}) {
+  async listMultiPartUploads(
+    path: string = '/',
+    prefix: string = '',
+    method: HttpMethod = 'GET',
+    opts: Object = {},
+  ): Promise<any> {
     if (typeof path !== 'string' || path.trim().length === 0) {
       this._log('error', ERROR_PATH_REQUIRED);
       throw new TypeError(ERROR_PATH_REQUIRED);
@@ -561,7 +570,7 @@ class S3 {
     const query = {
       uploads: '',
       ...opts,
-    };
+    } as Record<string, any>;
     const headers = {
       [HEADER_CONTENT_TYPE]: JSON_CONTENT_TYPE,
       [HEADER_AMZ_CONTENT_SHA256]: UNSIGNED_PAYLOAD,
@@ -576,7 +585,7 @@ class S3 {
       return {
         size: +(res.headers.get(HEADER_CONTENT_LENGTH) ?? '0'),
         mtime: new Date(res.headers.get(HEADER_LAST_MODIFIED) ?? ''),
-        etag: res.headers.get(HEADER_ETAG) ?? '',
+        ETag: res.headers.get(HEADER_ETAG) ?? '',
       };
     }
 
@@ -711,12 +720,12 @@ class S3 {
     }
 
     if (typeof parsedResponse === 'object' && parsedResponse !== null) {
-      if (!parsedResponse.InitiateMultipartUploadResult || !parsedResponse.InitiateMultipartUploadResult.UploadId) {
+      if (!parsedResponse.initiateMultipartUploadResult || !parsedResponse.initiateMultipartUploadResult.uploadId) {
         this._log('error', `${ERROR_PREFIX}Failed to create multipart upload: no uploadId in response`);
         throw new Error(`${ERROR_PREFIX}Failed to create multipart upload: Missing upload ID in response`);
       }
 
-      return parsedResponse.InitiateMultipartUploadResult.UploadId;
+      return parsedResponse.initiateMultipartUploadResult.uploadId;
     } else {
       this._log('error', `${ERROR_PREFIX}Failed to create multipart upload: unexpected response format`);
       throw new Error(`${ERROR_PREFIX}Failed to create multipart upload: Unexpected response format`);
@@ -752,7 +761,7 @@ class S3 {
 
     const res = await this._sendRequest(urlWithQuery, 'PUT', signedHeaders, data);
     const ETag = res.headers.get('etag') || '';
-    return { ETag, partNumber };
+    return { partNumber, ETag };
   }
 
   _validateUploadPartParams(key: string, data: Buffer | string, uploadId: string, partNumber: number, opts: Object) {
