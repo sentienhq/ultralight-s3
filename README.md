@@ -27,7 +27,7 @@ pnpm add femto-s3
 
 ## Usage
 
-```js
+```typescript
 import { S3 } from 'femto-s3';
 
 const s3 = new S3({
@@ -37,6 +37,6 @@ const s3 = new S3({
   bucket: 'your-bucket-name',
 });
 
-const data = await s3.getObject('path/to/file.txt');
+const data = await s3.get('path/to/file.txt');
 console.log(data);
 ```

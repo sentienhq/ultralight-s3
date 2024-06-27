@@ -1,6 +1,73 @@
 'use strict';
-const _createHmac = crypto.createHmac || (await import('node:crypto').then(m => m.createHmac));
-const _createHash = crypto.createHash || (await import('node:crypto').then(m => m.createHash));
+
+import { parse } from 'node:path';
+
+// Fuck you, Typescript
+interface S3Config {
+  accessKeyId: string;
+  secretAccessKey: string;
+  endpoint: string;
+  bucketName: string;
+  region?: string;
+  maxRequestSizeInBytes?: number;
+  requestAbortTimeout?: number;
+  logger?: Logger;
+}
+
+declare global {
+  interface Crypto {
+    createHmac: (
+      algorithm: string,
+      key: string | Buffer,
+    ) => {
+      update: (data: string | Buffer) => void;
+      digest: (encoding?: 'hex' | 'base64' | 'latin1') => string;
+    };
+    createHash: (algorithm: string) => {
+      update: (data: string | Buffer) => void;
+      digest: (encoding?: 'hex' | 'base64' | 'latin1') => string;
+    };
+  }
+}
+
+interface Logger {
+  info: (message: string, ...args: any[]) => void;
+  warn: (message: string, ...args: any[]) => void;
+  error: (message: string, ...args: any[]) => void;
+}
+
+interface UploadPart {
+  partNumber: number;
+  ETag: string;
+}
+
+interface CompleteMultipartUploadResult {
+  Location: string;
+  Bucket: string;
+  Key: string;
+  ETag: string;
+}
+
+type HttpMethod = 'POST' | 'GET' | 'HEAD' | 'PUT' | 'DELETE';
+
+let _createHmac = Crypto.createHmac;
+let _createHash = Crypto.createHash;
+
+try {
+  _createHmac = crypto.createHmac;
+  _createHash = crypto.createHash;
+} catch (e) {
+  // If crypto is not available in the global scope, try to import it
+  import('node:crypto')
+    .then(cryptoModule => {
+      _createHmac = cryptoModule.createHmac;
+      _createHash = cryptoModule.createHash;
+    })
+    .catch(() => {
+      _createHmac = undefined;
+      _createHash = undefined;
+    });
+}
 
 if (typeof _createHmac === 'undefined' && typeof _createHash === 'undefined') {
   console.error(
@@ -19,6 +86,7 @@ const XML_CONTENT_TYPE = 'application/xml';
 const JSON_CONTENT_TYPE = 'application/json';
 // List of keys that might contain sensitive information
 const SENSITIVE_KEYS_REDACTED = ['accessKeyId', 'secretAccessKey', 'sessionToken', 'password'];
+const MIN_MAX_REQUEST_SIZE_IN_BYTES = 5 * 1024 * 1024;
 
 // Headers
 const HEADER_AMZ_CONTENT_SHA256 = 'x-amz-content-sha256';
@@ -45,17 +113,19 @@ const ERROR_PATH_REQUIRED = `${ERROR_PREFIX}path must be a string`;
 const ERROR_PREFIX_TYPE = `${ERROR_PREFIX}prefix must be a string`;
 const ERROR_MAX_KEYS_TYPE = `${ERROR_PREFIX}maxKeys must be a positive integer`;
 
-const expectArray = {
+const expectArray: { [key: string]: boolean } = {
   contents: true,
 };
 
-const encodeAsHex = c => `%${c.charCodeAt(0).toString(16).toUpperCase()}`;
-function uriEscape(uriStr) {
+const encodeAsHex = (c: string): string => `%${c.charCodeAt(0).toString(16).toUpperCase()}`;
+
+const uriEscape = (uriStr: string): string => {
   return encodeURIComponent(uriStr).replace(/[!'()*]/g, encodeAsHex);
-}
-function uriResourceEscape(string) {
+};
+
+const uriResourceEscape = (string: string): string => {
   return uriEscape(string).replace(/%2F/g, '/');
-}
+};
 
 /**
  * S3 class for interacting with S3-compatible object storage services.
@@ -97,16 +167,25 @@ class S3 {
    * @param {Object} [config.logger=null] - A logger object with methods like info, warn, error.
    * @throws {TypeError} Will throw an error if required parameters are missing or of incorrect type.
    */
+  private accessKeyId: string;
+  private secretAccessKey: string;
+  private endpoint: string;
+  private bucketName: string;
+  private region: string;
+  private maxRequestSizeInBytes: number;
+  private requestAbortTimeout?: number;
+  private logger?: Logger;
+
   constructor({
     accessKeyId,
     secretAccessKey,
     endpoint,
     bucketName,
     region = 'auto',
-    maxRequestSizeInBytes = 5 * 1024 * 1024,
+    maxRequestSizeInBytes = MIN_MAX_REQUEST_SIZE_IN_BYTES,
     requestAbortTimeout = undefined,
-    logger = null,
-  }) {
+    logger = undefined,
+  }: S3Config) {
     this._validateConstructorParams(accessKeyId, secretAccessKey, endpoint, bucketName);
     this.accessKeyId = accessKeyId;
     this.secretAccessKey = secretAccessKey;
@@ -118,7 +197,12 @@ class S3 {
     this.logger = logger;
   }
 
-  _validateConstructorParams(accessKeyId, secretAccessKey, endpoint, bucketName) {
+  private _validateConstructorParams(
+    accessKeyId: string,
+    secretAccessKey: string,
+    endpoint: string,
+    bucketName: string,
+  ): void {
     if (typeof accessKeyId !== 'string' || accessKeyId.trim().length === 0)
       throw new TypeError(ERROR_ACCESS_KEY_REQUIRED);
     if (typeof secretAccessKey !== 'string' || secretAccessKey.trim().length === 0)
@@ -135,15 +219,15 @@ class S3 {
    * @param {Object} [additionalData={}] - Additional data to include in the log.
    * @private
    */
-  _log(level, message, additionalData = {}) {
+  private _log(level: 'info' | 'warn' | 'error', message: string, additionalData: Record<string, any> = {}): void {
     if (this.logger && typeof this.logger[level] === 'function') {
       // Function to recursively sanitize an object
-      const sanitize = obj => {
+      const sanitize = (obj: any): any => {
         if (typeof obj !== 'object' || obj === null) {
           return obj;
         }
         return Object.keys(obj).reduce(
-          (acc, key) => {
+          (acc: any, key) => {
             if (SENSITIVE_KEYS_REDACTED.includes(key.toLowerCase())) {
               acc[key] = '[REDACTED]';
             } else if (typeof obj[key] === 'object' && obj[key] !== null) {
@@ -181,19 +265,19 @@ class S3 {
   }
 
   getBucketName = () => this.bucketName;
-  setBucketName = bucketName => {
+  setBucketName = (bucketName: string) => {
     this.bucketName = bucketName;
   };
   getRegion = () => this.region;
-  setRegion = region => {
+  setRegion = (region: string) => {
     this.region = region;
   };
   getEndpoint = () => this.endpoint;
-  setEndpoint = endpoint => {
+  setEndpoint = (endpoint: string) => {
     this.endpoint = endpoint;
   };
   getMaxRequestSizeInBytes = () => this.maxRequestSizeInBytes;
-  setMaxRequestSizeInBytes = maxRequestSizeInBytes => {
+  setMaxRequestSizeInBytes = (maxRequestSizeInBytes: number) => {
     this.maxRequestSizeInBytes = maxRequestSizeInBytes;
   };
 
@@ -207,14 +291,14 @@ class S3 {
     requestAbortTimeout: this.requestAbortTimeout,
     logger: this.logger,
   });
-  setProps = props => {
-    this._validateConstructorParams(props.accessKeyId, props.secretAccessKey, props.endpoint);
+  setProps = (props: S3Config) => {
+    this._validateConstructorParams(props.accessKeyId, props.secretAccessKey, props.bucketName, props.endpoint);
     this.accessKeyId = props.accessKeyId;
     this.secretAccessKey = props.secretAccessKey;
-    this.region = props.region;
-    this.bucketName = props.bucket;
+    this.region = props.region || 'auto';
+    this.bucketName = props.bucketName;
     this.endpoint = props.endpoint;
-    this.maxRequestSizeInBytes = props.maxRequestSizeInBytes;
+    this.maxRequestSizeInBytes = props.maxRequestSizeInBytes || MIN_MAX_REQUEST_SIZE_IN_BYTES;
     this.requestAbortTimeout = props.requestAbortTimeout;
     this.logger = props.logger;
   };
@@ -225,7 +309,7 @@ class S3 {
    * @returns {Promise<number>} The content length of the object in bytes.
    * @throws {TypeError} If the key is not a non-empty string.
    */
-  async getContentLength(key) {
+  async getContentLength(key: string): Promise<number> {
     if (typeof key !== 'string' || key.trim().length === 0) {
       this._log('error', ERROR_KEY_REQUIRED);
       throw new TypeError(ERROR_KEY_REQUIRED);
@@ -240,7 +324,11 @@ class S3 {
     return contentLength ? parseInt(contentLength, 10) : 0;
   }
 
-  async bucketExists() {
+  /**
+   * Check if a bucket exists.
+   * @returns {Promise<boolean>} True if the bucket exists, false otherwise.
+   */
+  async bucketExists(): Promise<boolean> {
     const headers = {
       [HEADER_AMZ_CONTENT_SHA256]: UNSIGNED_PAYLOAD,
     };
@@ -280,7 +368,7 @@ class S3 {
    * @returns {Promise<boolean>} True if the file exists, false otherwise.
    * @throws {TypeError} If the key is not a non-empty string.
    */
-  async fileExists(key) {
+  async fileExists(key: string): Promise<boolean> {
     if (typeof key !== 'string' || key.trim().length === 0) {
       this._log('error', ERROR_KEY_REQUIRED);
       throw new TypeError(ERROR_KEY_REQUIRED);
@@ -296,15 +384,23 @@ class S3 {
       if (res.ok && res.status === 200) return true;
       else if (res.status === 404) return false;
       else this._handleErrorResponse(res);
-    } catch (error) {
-      this._log('error', `${ERROR_PREFIX}Failed to check if file exists: ${error.message}`);
-      throw new Error(`${ERROR_PREFIX}Failed to check if file exists: ${error.message}`);
+      return false;
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      this._log('error', `${ERROR_PREFIX}Failed to check if file exists: ${errorMessage}`);
+      throw new Error(`${ERROR_PREFIX}Failed to check if file exists: ${errorMessage}`);
     }
   }
-
-  async _sign(method, keyPath, query, headers, body) {
+  async _sign(
+    method: HttpMethod,
+    keyPath: string,
+    query: Object,
+    headers: Record<string, string | number>,
+    body: string | Buffer,
+  ): Promise<{ url: string; headers: Record<string, any> }> {
     const datetime = new Date().toISOString().replace(/[:-]|\.\d{3}/g, '');
-    const url = keyPath.length > 0 ? new URL(keyPath, this.endpoint) : new URL(this.endpoint);
+    const url =
+      typeof keyPath === 'string' && keyPath.length > 0 ? new URL(keyPath, this.endpoint) : new URL(this.endpoint);
     url.pathname = `/${encodeURI(this.bucketName)}${url.pathname}`;
     headers[HEADER_AMZ_CONTENT_SHA256] = body ? await _hash(body) : UNSIGNED_PAYLOAD;
     headers[HEADER_AMZ_DATE] = datetime;
@@ -330,14 +426,21 @@ class S3 {
     return { url: url.toString(), headers };
   }
 
-  _buildCanonicalHeaders(headers) {
+  _buildCanonicalHeaders(headers: Record<string, string | number>): string {
     return Object.entries(headers)
       .map(([key, value]) => `${key.toLowerCase()}:${String(value).trim()}`)
       .sort()
       .join('\n');
   }
 
-  async _buildCanonicalRequest(method, url, query, canonicalHeaders, signedHeaders, body) {
+  async _buildCanonicalRequest(
+    method: HttpMethod,
+    url: URL,
+    query: Object,
+    canonicalHeaders: string,
+    signedHeaders: string,
+    body: string | Buffer,
+  ): Promise<string> {
     return [
       method,
       url.pathname,
@@ -348,17 +451,17 @@ class S3 {
     ].join('\n');
   }
 
-  async _buildStringToSign(datetime, canonicalRequest) {
+  async _buildStringToSign(datetime: string, canonicalRequest: string): Promise<string> {
     const credentialScope = [datetime.slice(0, 8), this.region, S3_SERVICE, AWS_REQUEST_TYPE].join('/');
     return [AWS_ALGORITHM, datetime, credentialScope, await _hash(canonicalRequest)].join('\n');
   }
 
-  async _calculateSignature(datetime, stringToSign) {
+  async _calculateSignature(datetime: string, stringToSign: string): Promise<string> {
     const signingKey = await this._getSignatureKey(datetime.slice(0, 8));
     return _hmac(signingKey, stringToSign, 'hex');
   }
 
-  _buildAuthorizationHeader(datetime, signedHeaders, signature) {
+  _buildAuthorizationHeader(datetime: string, signedHeaders: string, signature: string): string {
     const credentialScope = [datetime.slice(0, 8), this.region, S3_SERVICE, AWS_REQUEST_TYPE].join('/');
     return [
       `${AWS_ALGORITHM} Credential=${this.accessKeyId}/${credentialScope}`,
@@ -377,7 +480,13 @@ class S3 {
    * @returns {Promise<Object|Array>} The list of objects or object metadata.
    * @throws {TypeError} If any of the parameters are of incorrect type.
    */
-  async list(path = '/', prefix = '', maxKeys = 1000, method = 'GET', opts = {}) {
+  async list(
+    path: string = '/',
+    prefix: string = '',
+    maxKeys: number = 1000,
+    method: HttpMethod = 'GET',
+    opts: Object = {},
+  ): Promise<Object | Array<Object>> {
     if (typeof path !== 'string' || path.trim().length === 0) {
       this._log('error', ERROR_PATH_REQUIRED);
       throw new TypeError(ERROR_PATH_REQUIRED);
@@ -404,10 +513,11 @@ class S3 {
     const query = {
       'list-type': LIST_TYPE,
       'max-keys': String(maxKeys),
+      prefix: prefix,
       ...opts,
     };
-    if (prefix.length > 0) {
-      query['prefix'] = prefix;
+    if (prefix.length === 0) {
+      delete (query as { prefix?: string })['prefix'];
     }
     const headers = {
       [HEADER_CONTENT_TYPE]: JSON_CONTENT_TYPE,
@@ -494,7 +604,7 @@ class S3 {
    * @param {Object} [opts={}] - Additional options for the get operation.
    * @returns {Promise<string>} The content of the object.
    */
-  async get(key, opts = {}) {
+  async get(key: string, opts: Record<string, any> = {}): Promise<string> {
     if (typeof key !== 'string' || key.trim().length === 0) {
       this._log('error', ERROR_KEY_REQUIRED);
       throw new TypeError(ERROR_KEY_REQUIRED);
@@ -519,7 +629,13 @@ class S3 {
    * @param {Object} [opts={}] - Additional options for the get operation.
    * @returns {Promise<ReadableStream>} A readable stream of the object content.
    */
-  async getStream(key, wholeFile = true, part = 0, chunkSizeInB = this.maxRequestSizeInBytes, opts = {}) {
+  async getStream(
+    key: string,
+    wholeFile: boolean = true,
+    part: number = 0,
+    chunkSizeInB: number = this.maxRequestSizeInBytes,
+    opts: Record<string, any> = {},
+  ): Promise<ReadableStream | null> {
     const query = wholeFile ? opts : { partNumber: part, ...opts };
     const headers = {
       [HEADER_CONTENT_TYPE]: JSON_CONTENT_TYPE,
@@ -541,7 +657,7 @@ class S3 {
    * @returns {Promise<Object>} The response from the put operation.
    * @throws {TypeError} If the key is not a non-empty string or data is not a Buffer or string.
    */
-  async put(key, data) {
+  async put(key: string, data: string | Buffer): Promise<Object> {
     if (typeof key !== 'string' || key.trim().length === 0) {
       this._log('error', ERROR_KEY_REQUIRED);
       throw new TypeError(ERROR_KEY_REQUIRED);
@@ -570,7 +686,7 @@ class S3 {
    * @throws {TypeError} If the key is not a non-empty string or fileType is not a string.
    * @throws {Error} If the multipart upload initiation fails.
    */
-  async getMultipartUploadId(key, fileType = DEFAULT_STREAM_CONTENT_TYPE) {
+  async getMultipartUploadId(key: string, fileType: string = DEFAULT_STREAM_CONTENT_TYPE): Promise<string> {
     if (typeof key !== 'string' || key.trim().length === 0) {
       this._log('error', ERROR_KEY_REQUIRED);
       throw new TypeError(ERROR_KEY_REQUIRED);
@@ -594,17 +710,30 @@ class S3 {
     const responseBody = await res.text();
     const parsedResponse = _parseXml(responseBody);
 
-    if (parsedResponse.error) {
-      this._log('error', `${ERROR_PREFIX}Failed to create multipart upload: ${parsedResponse.error.message}`);
-      throw new Error(`${ERROR_PREFIX}Failed to create multipart upload: ${parsedResponse.error.message}`);
+    if (
+      typeof parsedResponse === 'object' &&
+      parsedResponse !== null &&
+      'error' in parsedResponse &&
+      typeof parsedResponse.error === 'object' &&
+      parsedResponse.error !== null &&
+      'message' in parsedResponse.error
+    ) {
+      const errorMessage = String(parsedResponse.error.message);
+      this._log('error', `${ERROR_PREFIX}Failed to abort multipart upload: ${errorMessage}`);
+      throw new Error(`${ERROR_PREFIX}Failed to abort multipart upload: ${errorMessage}`);
     }
 
-    if (!parsedResponse.initiateMultipartUploadResult || !parsedResponse.initiateMultipartUploadResult.uploadId) {
-      this._log('error', `${ERROR_PREFIX}Failed to create multipart upload: no uploadId in response`);
-      throw new Error(`${ERROR_PREFIX}Failed to create multipart upload: Missing upload ID in response`);
-    }
+    if (typeof parsedResponse === 'object' && parsedResponse !== null) {
+      if (!parsedResponse.InitiateMultipartUploadResult || !parsedResponse.InitiateMultipartUploadResult.UploadId) {
+        this._log('error', `${ERROR_PREFIX}Failed to create multipart upload: no uploadId in response`);
+        throw new Error(`${ERROR_PREFIX}Failed to create multipart upload: Missing upload ID in response`);
+      }
 
-    return parsedResponse.initiateMultipartUploadResult.uploadId;
+      return parsedResponse.InitiateMultipartUploadResult.UploadId;
+    } else {
+      this._log('error', `${ERROR_PREFIX}Failed to create multipart upload: unexpected response format`);
+      throw new Error(`${ERROR_PREFIX}Failed to create multipart upload: Unexpected response format`);
+    }
   }
 
   /**
@@ -617,7 +746,13 @@ class S3 {
    * @returns {Promise<Object>} The ETag and part number of the uploaded part.
    * @throws {TypeError} If any of the parameters are of incorrect type.
    */
-  async uploadPart(key, data, uploadId, partNumber, opts = {}) {
+  async uploadPart(
+    key: string,
+    data: Buffer | string,
+    uploadId: string,
+    partNumber: number,
+    opts: Object = {},
+  ): Promise<UploadPart> {
     this._validateUploadPartParams(key, data, uploadId, partNumber, opts);
     const query = { uploadId, partNumber, ...opts };
     const headers = {
@@ -628,11 +763,11 @@ class S3 {
     const urlWithQuery = `${url}?${new URLSearchParams(query)}`;
 
     const res = await this._sendRequest(urlWithQuery, 'PUT', signedHeaders, data);
-    const etag = res.headers.get('etag');
-    return { etag, partNumber };
+    const ETag = res.headers.get('etag') || '';
+    return { ETag, partNumber };
   }
 
-  _validateUploadPartParams(key, data, uploadId, partNumber, opts) {
+  _validateUploadPartParams(key: string, data: Buffer | string, uploadId: string, partNumber: number, opts: Object) {
     if (typeof key !== 'string' || key.trim().length === 0) {
       this._log('error', ERROR_KEY_REQUIRED);
       throw new TypeError(ERROR_KEY_REQUIRED);
@@ -664,7 +799,11 @@ class S3 {
    * @throws {TypeError} If any of the parameters are of incorrect type.
    * @throws {Error} If the complete multipart upload operation fails.
    */
-  async completeMultipartUpload(key, uploadId, parts) {
+  async completeMultipartUpload(
+    key: string,
+    uploadId: string,
+    parts: Array<UploadPart>,
+  ): Promise<CompleteMultipartUploadResult> {
     if (typeof key !== 'string' || key.trim().length === 0) {
       this._log('error', ERROR_KEY_REQUIRED);
       throw new TypeError(ERROR_KEY_REQUIRED);
@@ -677,7 +816,7 @@ class S3 {
       this._log('error', ERROR_PARTS_REQUIRED);
       throw new TypeError(ERROR_PARTS_REQUIRED);
     }
-    if (!parts.every(part => typeof part.PartNumber === 'number' && typeof part.ETag === 'string')) {
+    if (!parts.every(part => typeof part.partNumber === 'number' && typeof part.ETag === 'string')) {
       this._log('error', ERROR_INVALID_PART);
       throw new TypeError(ERROR_INVALID_PART);
     }
@@ -697,9 +836,17 @@ class S3 {
     const responseBody = await res.text();
     const parsedResponse = _parseXml(responseBody);
 
-    if (parsedResponse.error) {
-      this._log('error', `${ERROR_PREFIX}Failed to complete multipart upload: ${parsedResponse.error.message}`);
-      throw new Error(`${ERROR_PREFIX}Failed to complete multipart upload: ${parsedResponse.error.message}`);
+    if (
+      typeof parsedResponse === 'object' &&
+      parsedResponse !== null &&
+      'error' in parsedResponse &&
+      typeof parsedResponse.error === 'object' &&
+      parsedResponse.error !== null &&
+      'message' in parsedResponse.error
+    ) {
+      const errorMessage = String(parsedResponse.error.message);
+      this._log('error', `${ERROR_PREFIX}Failed to abort multipart upload: ${errorMessage}`);
+      throw new Error(`${ERROR_PREFIX}Failed to abort multipart upload: ${errorMessage}`);
     }
 
     return parsedResponse.completeMultipartUploadResult;
@@ -712,7 +859,7 @@ class S3 {
    * @returns {Promise<Object>} - A promise that resolves to the abort response.
    * @throws {Error} If the abort operation fails.
    */
-  async abortMultipartUpload(key, uploadId) {
+  async abortMultipartUpload(key: string, uploadId: string): Promise<object> {
     // Input validation
     if (typeof key !== 'string' || key.trim().length === 0) {
       this._log('error', ERROR_KEY_REQUIRED);
@@ -745,9 +892,17 @@ class S3 {
         const responseBody = await res.text();
         const parsedResponse = _parseXml(responseBody);
 
-        if (parsedResponse.error) {
-          this._log('error', `${ERROR_PREFIX}Failed to abort multipart upload: ${parsedResponse.error.message}`);
-          throw new Error(`${ERROR_PREFIX}Failed to abort multipart upload: ${parsedResponse.error.message}`);
+        if (
+          typeof parsedResponse === 'object' &&
+          parsedResponse !== null &&
+          'error' in parsedResponse &&
+          typeof parsedResponse.error === 'object' &&
+          parsedResponse.error !== null &&
+          'message' in parsedResponse.error
+        ) {
+          const errorMessage = String(parsedResponse.error.message);
+          this._log('error', `${ERROR_PREFIX}Failed to abort multipart upload: ${errorMessage}`);
+          throw new Error(`${ERROR_PREFIX}Failed to abort multipart upload: ${errorMessage}`);
         }
 
         return {
@@ -760,20 +915,21 @@ class S3 {
         this._log('error', `${ERROR_PREFIX}Abort request failed with status ${res.status}`);
         throw new Error(`${ERROR_PREFIX}Abort request failed with status ${res.status}`);
       }
-    } catch (error) {
-      this._log('error', `${ERROR_PREFIX}Failed to abort multipart upload for key ${key}: ${error.message}`);
-      throw new Error(`${ERROR_PREFIX}Failed to abort multipart upload for key ${key}: ${error.message}`);
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      this._log('error', `${ERROR_PREFIX}Failed to abort multipart upload for key ${key}: ${errorMessage}`);
+      throw new Error(`${ERROR_PREFIX}Failed to abort multipart upload for key ${key}: ${errorMessage}`);
     }
   }
 
-  _buildCompleteMultipartUploadXml(parts) {
+  _buildCompleteMultipartUploadXml(parts: Array<UploadPart>): string {
     return `
       <CompleteMultipartUpload>
         ${parts
           .map(
             part => `
           <Part>
-            <PartNumber>${part.PartNumber}</PartNumber>
+            <PartNumber>${part.partNumber}</PartNumber>
             <ETag>${part.ETag}</ETag>
           </Part>
         `,
@@ -786,9 +942,9 @@ class S3 {
   /**
    * Delete an object from the bucket.
    * @param {string} key - The key of the object to delete.
-   * @returns {Promise<Object>} The response from the delete operation.
+   * @returns {Promise<string>} The response from the delete operation.
    */
-  async delete(key) {
+  async delete(key: string): Promise<string> {
     if (typeof key !== 'string' || key.trim().length === 0) {
       this._log('error', ERROR_KEY_REQUIRED);
       throw new TypeError(ERROR_KEY_REQUIRED);
@@ -804,7 +960,12 @@ class S3 {
     return res.text();
   }
 
-  async _sendRequest(url, method, headers, body = null) {
+  async _sendRequest(
+    url: string,
+    method: HttpMethod,
+    headers: Record<string, string | any>,
+    body?: string | Buffer,
+  ): Promise<Response> {
     this._log('info', `Sending ${method} request to ${url}, headers: ${JSON.stringify(headers)}`);
     const res = await fetch(url, {
       method,
@@ -820,7 +981,7 @@ class S3 {
     return res;
   }
 
-  async _handleErrorResponse(res) {
+  async _handleErrorResponse(res: Response) {
     const errorBody = await res.text();
     const errorCode = res.headers.get('x-amz-error-code') || 'Unknown';
     const errorMessage = res.headers.get('x-amz-error-message') || res.statusText;
@@ -833,17 +994,17 @@ class S3 {
     );
   }
 
-  _buildCanonicalQueryString(queryParams) {
+  _buildCanonicalQueryString(queryParams: Object): string {
     if (Object.keys(queryParams).length < 1) {
       return '';
     }
 
     return Object.keys(queryParams)
       .sort()
-      .map(key => `${encodeURIComponent(key)}=${encodeURIComponent(queryParams[key])}`)
+      .map(key => `${encodeURIComponent(key)}=${encodeURIComponent((queryParams as Record<string, any>)[key])}`)
       .join('&');
   }
-  async _getSignatureKey(dateStamp) {
+  async _getSignatureKey(dateStamp: string): Promise<string> {
     const kDate = await _hmac(`AWS4${this.secretAccessKey}`, dateStamp);
     const kRegion = await _hmac(kDate, this.region);
     const kService = await _hmac(kRegion, S3_SERVICE);
@@ -851,20 +1012,20 @@ class S3 {
   }
 }
 
-const _hash = async content => {
+const _hash = async (content: string | Buffer): Promise<string> => {
   const hashSum = _createHash('sha256');
   hashSum.update(content);
   return hashSum.digest('hex');
 };
 
-const _hmac = async (key, content, encoding) => {
+const _hmac = async (key: string | Buffer, content: string, encoding?: 'hex'): Promise<string> => {
   const hmacSum = _createHmac('sha256', key);
   hmacSum.update(content);
   return hmacSum.digest(encoding);
 };
 
-const _parseXml = str => {
-  const unescapeXml = value => {
+const _parseXml = (str: string): string | object | any => {
+  const unescapeXml = (value: string): string => {
     return value
       .replace(/&quot;/g, '"')
       .replace(/&apos;/g, "'")
@@ -883,16 +1044,20 @@ const _parseXml = str => {
     const parsedValue = value != null ? _parseXml(value) : true;
 
     if (typeof parsedValue === 'string') {
-      json[fullKey] = unescapeXml(parsedValue); // Apply unescapeXml here
-    } else if (Array.isArray(json[fullKey])) {
-      json[fullKey].push(parsedValue);
+      (json as { [key: string]: any })[fullKey] = unescapeXml(parsedValue);
+    } else if (Array.isArray((json as { [key: string]: any })[fullKey])) {
+      (json as { [key: string]: any })[fullKey].push(parsedValue);
     } else {
-      json[fullKey] =
-        json[fullKey] != null ? [json[fullKey], parsedValue] : expectArray[fullKey] ? [parsedValue] : parsedValue;
+      (json as { [key: string]: any })[fullKey] =
+        (json as { [key: string]: any })[fullKey] != null
+          ? [(json as { [key: string]: any })[fullKey], parsedValue]
+          : expectArray[fullKey]
+            ? [parsedValue]
+            : parsedValue;
     }
   }
 
-  return Object.keys(json).length ? json : unescapeXml(str); // Also apply unescapeXml here for root text nodes
+  return Object.keys(json).length ? json : unescapeXml(str);
 };
 
 export { S3 };
