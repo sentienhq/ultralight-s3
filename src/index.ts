@@ -50,24 +50,8 @@ interface CompleteMultipartUploadResult {
 
 type HttpMethod = 'POST' | 'GET' | 'HEAD' | 'PUT' | 'DELETE';
 
-let _createHmac = Crypto.createHmac;
-let _createHash = Crypto.createHash;
-
-try {
-  _createHmac = crypto.createHmac;
-  _createHash = crypto.createHash;
-} catch (e) {
-  // If crypto is not available in the global scope, try to import it
-  import('node:crypto')
-    .then(cryptoModule => {
-      _createHmac = cryptoModule.createHmac;
-      _createHash = cryptoModule.createHash;
-    })
-    .catch(() => {
-      _createHmac = undefined;
-      _createHash = undefined;
-    });
-}
+let _createHmac = crypto.createHmac || (await import('node:crypto')).createHmac;
+let _createHash = crypto.createHash || (await import('node:crypto')).createHash;
 
 if (typeof _createHmac === 'undefined' && typeof _createHash === 'undefined') {
   console.error(
@@ -513,11 +497,10 @@ class S3 {
     const query = {
       'list-type': LIST_TYPE,
       'max-keys': String(maxKeys),
-      prefix: prefix,
       ...opts,
-    };
-    if (prefix.length === 0) {
-      delete (query as { prefix?: string })['prefix'];
+    } as { [key: string]: any };
+    if (prefix.length > 0) {
+      query['prefix'] = prefix;
     }
     const headers = {
       [HEADER_CONTENT_TYPE]: JSON_CONTENT_TYPE,
@@ -530,10 +513,14 @@ class S3 {
     const responseBody = await res.text();
 
     if (method === 'HEAD') {
+      const contentLength = res.headers.get(HEADER_CONTENT_LENGTH);
+      const lastModified = res.headers.get(HEADER_LAST_MODIFIED);
+      const etag = res.headers.get(HEADER_ETAG);
+
       return {
-        size: +res.headers.get(HEADER_CONTENT_LENGTH),
-        mtime: new Date(res.headers.get(HEADER_LAST_MODIFIED)),
-        etag: res.headers.get(HEADER_ETAG),
+        size: contentLength ? +contentLength : undefined,
+        mtime: lastModified ? new Date(lastModified) : undefined,
+        etag: etag || undefined,
       };
     }
 
@@ -587,9 +574,9 @@ class S3 {
 
     if (method === 'HEAD') {
       return {
-        size: +res.headers.get(HEADER_CONTENT_LENGTH),
-        mtime: new Date(res.headers.get(HEADER_LAST_MODIFIED)),
-        etag: res.headers.get(HEADER_ETAG),
+        size: +(res.headers.get(HEADER_CONTENT_LENGTH) ?? '0'),
+        mtime: new Date(res.headers.get(HEADER_LAST_MODIFIED) ?? ''),
+        etag: res.headers.get(HEADER_ETAG) ?? '',
       };
     }
 
@@ -754,10 +741,11 @@ class S3 {
     opts: Object = {},
   ): Promise<UploadPart> {
     this._validateUploadPartParams(key, data, uploadId, partNumber, opts);
-    const query = { uploadId, partNumber, ...opts };
+    const query = { uploadId, partNumber, ...opts } as { [key: string]: any };
     const headers = {
       [HEADER_CONTENT_LENGTH]: data.length,
-    };
+    } as { [key: string]: any };
+
     const encodedKey = uriResourceEscape(key);
     const { url, headers: signedHeaders } = await this._sign('PUT', encodedKey, query, headers, data);
     const urlWithQuery = `${url}?${new URLSearchParams(query)}`;
