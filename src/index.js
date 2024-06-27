@@ -495,6 +495,10 @@ class S3 {
    * @returns {Promise<string>} The content of the object.
    */
   async get(key, opts = {}) {
+    if (typeof key !== 'string' || key.trim().length === 0) {
+      this._log('error', ERROR_KEY_REQUIRED);
+      throw new TypeError(ERROR_KEY_REQUIRED);
+    }
     const headers = {
       [HEADER_CONTENT_TYPE]: JSON_CONTENT_TYPE,
       [HEADER_AMZ_CONTENT_SHA256]: UNSIGNED_PAYLOAD,

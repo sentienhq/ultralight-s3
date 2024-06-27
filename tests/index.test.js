@@ -270,4 +270,133 @@ describe('S3 class', () => {
     const existsAfterDelete = await s3.fileExists(key);
     expect(existsAfterDelete).toBe(false);
   });
+
+  // Error handling: Invalid credentials
+  test('should fail operations with invalid credentials', async () => {
+    const invalidS3 = new S3({
+      endpoint: s3.getEndpoint(),
+      accessKeyId: 'invalidAccessKey',
+      secretAccessKey: 'invalidSecretKey',
+      bucketName: s3.getBucketName(),
+    });
+
+    await expect(invalidS3.list()).rejects.toThrow();
+    await expect(invalidS3.put('test-key', 'content')).rejects.toThrow();
+  });
+
+  // Error handling: Non-existent objects
+  test('should handle non-existent objects correctly', async () => {
+    const nonExistentKey = 'non-existent-object';
+
+    await expect(s3.get(nonExistentKey)).rejects.toThrow();
+    await expect(s3.getContentLength(nonExistentKey)).rejects.toThrow();
+
+    const exists = await s3.fileExists(nonExistentKey);
+    expect(exists).toBe(false);
+  });
+
+  // Error handling: Invalid input parameters
+  test('should throw error for invalid input parameters', async () => {
+    await expect(s3.put('', 'content')).rejects.toThrow(TypeError);
+    await expect(s3.get('')).rejects.toThrow(TypeError);
+    await expect(s3.delete('')).rejects.toThrow(TypeError);
+    await expect(s3.getContentLength('')).rejects.toThrow(TypeError);
+    await expect(s3.fileExists('')).rejects.toThrow(TypeError);
+    await expect(s3.list('', '', -1)).rejects.toThrow(TypeError);
+    await expect(s3.getMultipartUploadId('')).rejects.toThrow(TypeError);
+    await expect(s3.uploadPart('', Buffer.from(''), '', 0)).rejects.toThrow(TypeError);
+    await expect(s3.completeMultipartUpload('', '', [])).rejects.toThrow(TypeError);
+    await expect(s3.abortMultipartUpload('', '')).rejects.toThrow(TypeError);
+  });
+
+  test('should handle empty files correctly', async () => {
+    const key = 'empty-file';
+    const content = '';
+
+    await s3.put(key, content);
+    const retrievedContent = await s3.get(key);
+    expect(retrievedContent).toBe(content);
+
+    const contentLength = await s3.getContentLength(key);
+    expect(contentLength).toBe(0);
+
+    await s3.delete(key);
+  });
+
+  // Concurrent operations: Race conditions in multipart uploads
+  test('should handle concurrent multipart uploads correctly', async () => {
+    const key = 'concurrent-multipart-test';
+    const partSize = 5 * 1024 * 1024; // 5MB
+    const buffer = randomBytes(partSize * 3); // 15MB total
+
+    const uploadId = await s3.getMultipartUploadId(key);
+
+    const uploadParts = async (start, end, partNumber) => {
+      const part = buffer.subarray(start, end);
+      return s3.uploadPart(key, part, uploadId, partNumber);
+    };
+
+    const [upload1, upload2, upload3] = await Promise.all([
+      uploadParts(0, partSize, 1),
+      uploadParts(partSize, partSize * 2, 2),
+      uploadParts(partSize * 2, partSize * 3, 3),
+    ]);
+
+    const result = await s3.completeMultipartUpload(key, uploadId, [
+      { PartNumber: 1, ETag: upload1.etag },
+      { PartNumber: 2, ETag: upload2.etag },
+      { PartNumber: 3, ETag: upload3.etag },
+    ]);
+
+    expect(result).toBeTruthy();
+
+    const uploadedContentLength = await s3.getContentLength(key);
+    expect(uploadedContentLength).toBe(buffer.length);
+
+    await s3.delete(key);
+  });
+
+  // Pagination: Large number of objects
+  // TODO - FIX THIS TEST
+  // test('should handle pagination correctly for large number of objects', async () => {
+  //   const prefix = 'pagination-test-';
+  //   const objectCount = 1050; // More than default max keys (1000)
+
+  //   // Create test objects
+  //   for (let i = 0; i < objectCount; i++) {
+  //     await s3.put(`${prefix}${i.toString().padStart(4, '0')}`, `Content ${i}`);
+  //   }
+
+  //   let allObjects = [];
+  //   let marker = '';
+  //   do {
+  //     const result = await s3.list('', prefix, 1000, 'GET', { marker });
+  //     allObjects = allObjects.concat(result);
+  //     if (result.length > 0) {
+  //       marker = result[result.length - 1].key;
+  //     }
+  //   } while (allObjects.length < objectCount);
+
+  //   expect(allObjects.length).toBe(objectCount);
+
+  //   // Clean up test objects
+  //   for (const obj of allObjects) {
+  //     await s3.delete(obj.key);
+  //   }
+  // });
+
+  // test to clean up after tests
+  afterAll(async () => {
+    await s3.delete('test-object');
+    await s3.delete('test-folder');
+    await s3.delete('empty-file');
+    await s3.delete('special!@#$%^&*()_+{}[]|;:,.<>?`~-characters');
+    await s3.delete('multipart-test');
+    await s3.delete('concurrent-multipart-test');
+    await s3.delete('stream-test');
+    await s3.delete('abort-multipart-test');
+    await s3.delete('list-test-object');
+    await s3.delete('delete-upload-test');
+    await s3.delete('make-folder-test');
+  });
 });
