@@ -2,6 +2,12 @@
 
 ~15KB lightweight S3 client with zero dependencies, designed for Node.js, edge computing like Cloudflare workers, AWS Lambda (and browsers - not implemented yet).
 
+![npm package version](https://img.shields.io/npm/v/ultralight-s3)
+![npm package minimized gzipped size](https://img.shields.io/bundlejs/size/ultralight-s3)
+![NPM License](https://img.shields.io/npm/l/ultralight-s3)
+
+![GitHub Issues or Pull Requests](https://img.shields.io/github/issues/sentienhq/ultralight-s3)
+
 ## Features
 
 - 🚀 Lightweight: Only ~15KB minified
