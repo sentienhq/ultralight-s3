@@ -1,17 +1,26 @@
 {
   "name": "ultralight-s3",
   "version": "0.0.1",
-  "description": "A ~15KB lightweight S3 client that doesn't require anything and anyone.",
-  "main": "./lib/index.js",
-  "module": "./lib/index.js",
+  "description": "🪽 A turbo lightweight S3 client, no-dependency, ideal for edges or platforms like @cloudflare @aws @Azure @GoogleCloudPlatform @ceph @minio",
+  "main": "./lib/index.min.js",
+  "module": "./lib/index.min.js",
   "type": "module",
   "exports": {
     ".": {
-      "import": "./lib/index.js"
+      "import": {
+        "default": "./lib/index.min.js",
+        "types": "./lib/index.d.ts"
+      }
+    },
+    "./full": {
+      "import": {
+        "default": "./lib/index.js",
+        "types": "./lib/index.d.ts"
+      }
     }
   },
   "scripts": {
-    "prepublishOnly": "npm run build && npm run build:node",
+    "prepublishOnly": "npm run build && npm run build:node && npm run test",
     "build": "tsc",
     "build:node": "tsc --module node16 --outDir ./lib/ &&  esbuild lib/index.js --bundle --outfile=lib/index.min.js --platform=node --format=esm --minify --sourcemap",
     "dev:wrangler": "wrangler dev --port 8787",
@@ -30,6 +39,9 @@
     "projects": [
       "tests/node.jest.config.js"
     ]
+  },
+  "engines": {
+    "node": ">=16"
   },
   "keywords": [],
   "author": "Peter Jensen @ SentienHQ",
