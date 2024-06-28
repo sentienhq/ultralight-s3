@@ -1,12 +1,12 @@
 # 🪽 ultralight-s3
 
-~15KB lightweight S3 client with zero dependencies, designed for Node.js, edge computing, Cloudflare workers, AWS Lambda (and browsers - not implemented yet).
+~15KB lightweight S3 client with zero dependencies, designed for Node.js, edge computing like Cloudflare workers, AWS Lambda (and browsers - not implemented yet).
 
 ## Features
 
 - 🚀 Lightweight: Only ~15KB minified
 - 🔧 Zero dependencies
-- 💻 Works on Node.js, perfect for edge computing, serverless
+- 💻 Works on NodeJS, Cloudflare workers, ideal for edge computing (browser support - not implemented yet)
 - 🔑 Supports essential S3 APIs (list, put, get, delete and a few more)
 - 🔁 Streaming support & multipart uploads for large files
 - 📦 Bring your own S3 bucket
@@ -90,6 +90,8 @@ await s3.put('path/to/file.txt', Buffer.from('Hello, World!'));
 await s3.delete('path/to/file.txt');
 ```
 
+For some examples, check the [dev directory](https://github.com/sentienhq/ultralight-s3/tree/dev/dev) and try to use it with [Hono](https://github.com/honojs/hono) or [Cloudflare Workers](https://workers.cloudflare.com/).
+
 ## Installation
 
 ```bash
@@ -143,3 +145,141 @@ const s3 = new S3({
   logger: console, // optional - for debugging
 });
 ```
+
+### Others
+
+##### (AWS Lambda, Azure, Google Cloud, Ceph, etc)
+
+Not tested, but should work with other S3 compatible services. Full list - soon to come. PRs are welcome.
+
+## API
+
+**new S3(config: Object)**
+
+- **Input**: A configuration object with the following properties:
+  - `accessKeyId: string`: The access key ID for authentication.
+  - `secretAccessKey: string`: The secret access key for authentication.
+  - `endpoint: string`: The endpoint URL of the S3-compatible service.
+  - `bucketName: string`: The name of the bucket to operate on.
+  - `region?: string` (optional): The region of the S3 service (default: 'auto').
+  - `maxRequestSizeInBytes?: number` (optional): The maximum size of a single request in bytes (minimum 5MB).
+  - `requestAbortTimeout?: number` (optional): The timeout in milliseconds after which a request should be aborted.
+  - `logger?: Object` (optional): A logger object with methods like info, warn, error.
+- **Behavior**: Creates a new instance of the S3 class with the provided configuration.
+- **Returns**: S3: An instance of the S3 class.
+
+**list(path?: string, prefix?: string, maxKeys?: number, method?: string, opts?: Object): Promise<Array<Object\>>**
+
+- **Input**:
+  - `path?: string` (optional): The path to list objects from (default: '/').
+  - `prefix?: string` (optional): The prefix to filter objects (default: '').
+  - `maxKeys?: number` (optional): The maximum number of keys to return (default: 1000).
+  - `method?: string` (optional): The HTTP method to use (default: 'GET').
+  - `opts?: Object` (optional): Additional options for the list operation.
+- **Behavior**: Lists objects in the bucket, supporting pagination and filtering.
+- **Returns**: Promise<Array<Object\>\>: A promise that resolves to an array of objects or object metadata.
+
+**put(key: string, data: Buffer | string): Promise<Object\>**
+
+- **Input**:
+  - `key: string`: The key of the object to put.
+  - `data: Buffer | string`: The content of the object.
+- **Behavior**: Uploads an object to the bucket.
+- **Returns**: Promise<Object\>: A promise that resolves to the response from the put operation.
+
+**get(key: string, opts?: Object): Promise<string>**
+
+- **Input**:
+  - `key: string`: The key of the object to get.
+  - `opts?: Object` (optional): Additional options for the get operation.
+- **Behavior**: Retrieves an object from the bucket.
+- **Returns**: Promise<string\>: A promise that resolves to the content of the object.
+
+**getStream(key: string, wholeFile?: boolean, part?: number, chunkSizeInB?: number, opts?: Object): Promise<ReadableStream | null\>**
+
+- **Input**:
+  - `key: string`: The key of the object to get.
+  - `wholeFile?: boolean` (optional): Whether to get the whole file or a part (default: true).
+  - `part?: number` (optional): The part number to get if not getting the whole file (default: 0).
+  - `chunkSizeInB?: number` (optional): The size of each chunk in bytes (default: maxRequestSizeInBytes).
+  - `opts?: Object` (optional): Additional options for the get operation.
+- **Behavior**: Retrieves a readable stream of an object from the bucket.
+- **Returns**: Promise<ReadableStream | null>: A promise that resolves to a ReadableStream of the object content.
+
+**delete(key: string): Promise<string>**
+
+- **Input**: `key: string`: The key of the object to delete.
+- **Behavior**: Deletes an object from the bucket.
+- **Returns**: Promise<string\>: A promise that resolves to the response from the delete operation.
+
+**fileExists(key: string): Promise<boolean>**
+
+- **Input**: `key: string`: The key of the object to check.
+- **Behavior**: Checks if an object exists in the bucket.
+- **Returns**: Promise<boolean\>: A promise that resolves to a boolean indicating whether the object exists.
+
+**getContentLength(key: string): Promise<number>**
+
+- **Input**: `key: string`: The key of the object.
+- **Behavior**: Gets the content length of an object.
+- **Returns**: Promise<number\>: A promise that resolves to the content length of the object in bytes.
+
+**getMultipartUploadId(key: string, fileType?: string): Promise<string>**
+
+- **Input**:
+  - `key: string`: The key of the object to upload.
+  - `fileType?: string` (optional): The MIME type of the file (default: 'application/octet-stream').
+- **Behavior**: Initiates a multipart upload.
+- **Returns**: Promise<string\>: A promise that resolves to the upload ID for the multipart upload.
+
+**uploadPart(key: string, data: Buffer | string, uploadId: string, partNumber: number, opts?: Object): Promise<{ partNumber: number, ETag: string }>**
+
+- **Input**:
+  - `key: string`: The key of the object being uploaded.
+  - `data: Buffer | string`: The content of the part.
+  - `uploadId: string`: The upload ID of the multipart upload.
+  - `partNumber: number`: The part number.
+  - `opts?: Object` (optional): Additional options for the upload.
+- **Behavior**: Uploads a part in a multipart upload.
+- **Returns**: Promise<{ partNumber: number, ETag: string }>: A promise that resolves to an object containing the ETag and part number of the uploaded part.
+
+**completeMultipartUpload(key: string, uploadId: string, parts: Array<{ partNumber: number, ETag: string }>): Promise<Object\>**
+
+- **Input**:
+  - `key: string`: The key of the object being uploaded.
+  - `uploadId: string`: The upload ID of the multipart upload.
+  - `parts: Array<{ partNumber: number, ETag: string }>`: An array of objects containing PartNumber and ETag for each part.
+- **Behavior**: Completes a multipart upload.
+- **Returns**: Promise<Object\>: A promise that resolves to the result of the complete multipart upload operation.
+
+**abortMultipartUpload(key: string, uploadId: string): Promise<Object\>**
+
+- **Input**:
+  - `key: string`: The key of the object being uploaded.
+  - `uploadId: string`: The ID of the multipart upload to abort.
+- **Behavior**: Aborts a multipart upload.
+- **Returns**: Promise<Object\>: A promise that resolves to the abort response.
+
+**bucketExists(): Promise<boolean>**
+
+- **Behavior**: Checks if the configured bucket exists.
+- **Returns**: Promise<boolean>: A promise that resolves to a boolean indicating whether the bucket exists.
+
+Also all essential getters and setters for the config object.
+
+## Community
+
+Stay connected with the community and get support.
+
+- [Issues](https://github.com/sentienhq/ultralight-s3/issues): Report bugs or request features
+- [GH Discussions](https://github.com/sentienhq/ultralight-s3/discussions): Ask questions and share ideas
+- X/Twitter: [@SentienHQ](https://x.com/sentienhq)
+- Webbsite: [sentienhq.com](https://sentienhq.com)
+
+## Contributing
+
+Contributions are welcome! Please open an issue or submit a pull request.
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE.md](LICENSE.md) file for details.

@@ -24,7 +24,7 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/sentienhq/femtoS3.git"
+    "url": "git+https://github.com/sentienhq/ultralight-s3.git"
   },
   "jest": {
     "projects": [
@@ -35,9 +35,9 @@
   "author": "Peter Jensen @ SentienHQ",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/sentienhq/femtoS3.js/issues"
+    "url": "https://github.com/sentienhq/ultralight-s3/issues"
   },
-  "homepage": "https://github.com/sentienhq/femtoS3.js#readme",
+  "homepage": "https://github.com/sentienhq/ultralight-s3#readme",
   "devDependencies": {
     "@hono/node-server": "^1.11.2",
     "@types/jest": "^29.5.12",
