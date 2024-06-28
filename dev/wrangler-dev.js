@@ -1,5 +1,4 @@
 import { Hono } from 'hono';
-// import avro from 'avro-js';
 
 import S3 from '../lib/index.js';
 

@@ -2,7 +2,6 @@ import { Hono } from 'hono';
 import { serve } from '@hono/node-server';
 import { env } from 'node:process';
 import { html, raw } from 'hono/html';
-// import avro from 'avro-js';
 
 import { S3 } from '../lib/index.js';
 const app = new Hono();
