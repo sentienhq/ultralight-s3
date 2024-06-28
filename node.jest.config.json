@@ -1,5 +1,5 @@
 {
-  "displayName": "femtoS3 node tests",
+  "displayName": "ultralight-s3 node tests",
   "testTimeout": 60000,
   "verbose": true,
   "testEnvironment": "node",

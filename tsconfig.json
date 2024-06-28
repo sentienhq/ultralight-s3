@@ -1,7 +1,7 @@
 {
   "compilerOptions": {
     "target": "ES2018",
-    "module": "ESNext",
+    "module": "Node16",
     "lib": ["ES2018", "DOM", "DOM.Iterable", "ES2015"],
     "declaration": true,
     "outDir": "./lib",

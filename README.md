@@ -1,6 +1,6 @@
-# femto-s3
+# ultralight-s3
 
-A turbo lightweight S3 client that doesn't require anything and anyone. Only for the thick-skinned personalities.
+A ~15KB lightweight S3 client that doesn't require anything and anyone. Only for the thick-skinned personalities.
 
 - Works on Node, edge, workers, lambda, and browser (NOT IMEPLEMENTED YET)
 - Supports only essential S3 APIs (list, put (single and multipart), get (single and stream), delete, etc...)
@@ -10,25 +10,25 @@ A turbo lightweight S3 client that doesn't require anything and anyone. Only for
 ## Installation
 
 ```bash
-npm install femto-s3
+npm install ultralight-s3
 
 # or
 
-yarn add femto-s3
+yarn add ultralight-s3
 
 # or
 
-pnpm add femto-s3
+pnpm add ultralight-s3
 
 # or
 # Not yet implemented
-# <script src="https://unpkg.com/femtos3/dist/femto-s3.min.js" defer></script>
+# <script src="https://unpkg.com/ultralight-s3/dist/ultralight-s3.min.js" defer></script>
 ```
 
 ## Usage
 
 ```typescript
-import { S3 } from 'femto-s3';
+import { S3 } from 'ultralight-s3';
 
 const s3 = new S3({
   accessKeyId: 'your-access-key-id',

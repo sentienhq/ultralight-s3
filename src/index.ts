@@ -2,7 +2,6 @@
 
 import { parse } from 'node:path';
 
-// Fuck you, Typescript
 interface S3Config {
   accessKeyId: string;
   secretAccessKey: string;
@@ -55,7 +54,7 @@ let _createHash = crypto.createHash || (await import('node:crypto')).createHash;
 
 if (typeof _createHmac === 'undefined' && typeof _createHash === 'undefined') {
   console.error(
-    'FemtoS3 Module: Crypto functions are not available, please report the issue with necessary description: https://github.com/sentienhq/femtoS3.js/issues',
+    'ultralight-S3 Module: Crypto functions are not available, please report the issue with necessary description: https://github.com/sentienhq/ultralight-s3/issues',
   );
 }
 
@@ -83,7 +82,7 @@ const HEADER_ETAG = 'etag';
 const HEADER_LAST_MODIFIED = 'last-modified';
 
 // Error messages
-const ERROR_PREFIX = 'FemtoS3 Module: ';
+const ERROR_PREFIX = 'ultralight-s3 Module: ';
 const ERROR_ACCESS_KEY_REQUIRED = `${ERROR_PREFIX}accessKeyId must be a non-empty string`;
 const ERROR_SECRET_KEY_REQUIRED = `${ERROR_PREFIX}secretAccessKey must be a non-empty string`;
 const ERROR_ENDPOINT_REQUIRED = `${ERROR_PREFIX}endpoint must be a non-empty string`;

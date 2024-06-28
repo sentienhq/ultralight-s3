@@ -1,7 +1,7 @@
 {
-  "name": "femto-s3",
+  "name": "ultralight-s3",
   "version": "0.0.1",
-  "description": "A turbo lightweight S3 client that doesn't require anything and anyone.",
+  "description": "A ~15KB lightweight S3 client that doesn't require anything and anyone.",
   "main": "./lib/index.js",
   "module": "./lib/index.js",
   "type": "module",
