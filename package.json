@@ -20,7 +20,7 @@
     }
   },
   "scripts": {
-    "prepublishOnly": "npm run build && npm run build:node && npm run test",
+    "prepublishOnly": "npm run build:node && npm run test",
     "build": "tsc",
     "build:node": "tsc --module node16 --outDir ./lib/ &&  esbuild lib/index.js --bundle --outfile=lib/index.min.js --platform=node --format=esm --minify --sourcemap",
     "dev:wrangler": "wrangler dev --port 8787",
