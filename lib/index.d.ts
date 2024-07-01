@@ -173,12 +173,12 @@ declare class S3 {
      * Get a stream of an object from the bucket.
      * @param {string} key - The key of the object to get.
      * @param {boolean} [wholeFile=true] - Whether to get the whole file or a part.
-     * @param {number} [part=0] - The part number to get if not getting the whole file.
-     * @param {number} [chunkSizeInB=this.maxRequestSizeInBytes] - The size of each chunk in bytes.
+     * @param {number} [rangeFrom=0] - The range from to get if not getting the whole file.
+     * @param {number} [rangeTo=this.maxRequestSizeInBytes] - The range to to get if not getting the whole file.
      * @param {Object} [opts={}] - Additional options for the get operation.
      * @returns {Promise<ReadableStream>} A readable stream of the object content.
      */
-    getStream(key: string, wholeFile?: boolean, part?: number, chunkSizeInB?: number, opts?: Record<string, any>): Promise<ReadableStream | null>;
+    getStream(key: string, wholeFile?: boolean, rangeFrom?: number, rangeTo?: number, opts?: Record<string, any>): Promise<ReadableStream | null>;
     /**
      * Put an object into the bucket.
      * @param {string} key - The key of the object to put. To create a folder, include a trailing slash.

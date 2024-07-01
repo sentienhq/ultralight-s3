@@ -619,23 +619,23 @@ class S3 {
    * Get a stream of an object from the bucket.
    * @param {string} key - The key of the object to get.
    * @param {boolean} [wholeFile=true] - Whether to get the whole file or a part.
-   * @param {number} [part=0] - The part number to get if not getting the whole file.
-   * @param {number} [chunkSizeInB=this.maxRequestSizeInBytes] - The size of each chunk in bytes.
+   * @param {number} [rangeFrom=0] - The range from to get if not getting the whole file.
+   * @param {number} [rangeTo=this.maxRequestSizeInBytes] - The range to to get if not getting the whole file.
    * @param {Object} [opts={}] - Additional options for the get operation.
    * @returns {Promise<ReadableStream>} A readable stream of the object content.
    */
   async getStream(
     key: string,
     wholeFile: boolean = true,
-    part: number = 0,
-    chunkSizeInB: number = this.maxRequestSizeInBytes,
+    rangeFrom: number = 0,
+    rangeTo: number = this.maxRequestSizeInBytes,
     opts: Record<string, any> = {},
   ): Promise<ReadableStream | null> {
-    const query = wholeFile ? opts : { partNumber: part, ...opts };
+    const query = opts;
     const headers = {
       [HEADER_CONTENT_TYPE]: JSON_CONTENT_TYPE,
       [HEADER_AMZ_CONTENT_SHA256]: UNSIGNED_PAYLOAD,
-      ...(wholeFile ? {} : { range: `bytes=${part * chunkSizeInB}-${(part + 1) * chunkSizeInB - 1}` }),
+      ...(wholeFile ? {} : { range: `bytes=${rangeFrom}-${rangeTo}` }),
     };
     const encodedKey = uriResourceEscape(key);
     const { url, headers: signedHeaders } = await this._sign('GET', encodedKey, query, headers, '');

@@ -201,13 +201,13 @@ Not tested, but should work with other S3 compatible services. Full list - soon 
 - **Behavior**: Retrieves an object from the bucket.
 - **Returns**: Promise<string\>: A promise that resolves to the content of the object.
 
-**getStream(key: string, wholeFile?: boolean, part?: number, chunkSizeInB?: number, opts?: Object): Promise<ReadableStream | null\>**
+**getStream(key: string, wholeFile?: boolean, rangeFrom?: number, rangeTo?: number, opts?: Object): Promise<ReadableStream | null\>**
 
 - **Input**:
   - `key: string`: The key of the object to get.
   - `wholeFile?: boolean` (optional): Whether to get the whole file or a part (default: true).
-  - `part?: number` (optional): The part number to get if not getting the whole file (default: 0).
-  - `chunkSizeInB?: number` (optional): The size of each chunk in bytes (default: maxRequestSizeInBytes).
+  - `rangeFrom?: number` (optional): The byte range from to get if not getting the whole file (default: 0).
+  - `rangeTo?: number` (optional): The byte range to to get if not getting the whole file (default: maxRequestSizeInBytes).
   - `opts?: Object` (optional): Additional options for the get operation.
 - **Behavior**: Retrieves a readable stream of an object from the bucket.
 - **Returns**: Promise<ReadableStream | null>: A promise that resolves to a ReadableStream of the object content.

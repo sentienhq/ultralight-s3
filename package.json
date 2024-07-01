@@ -2,14 +2,21 @@
   "name": "ultralight-s3",
   "version": "0.0.1",
   "description": "🪽 A turbo lightweight S3 client, no-dependency, ideal for edges or platforms like @cloudflare @aws @Azure @GoogleCloudPlatform @ceph @minio",
-  "main": "./lib/index.min.js",
+  "main": "./lib/index.min",
   "module": "./lib/index.min.js",
+  "types": "./lib/index.d.ts",
   "type": "module",
   "exports": {
     ".": {
       "import": {
         "default": "./lib/index.min.js",
         "types": "./lib/index.d.ts"
+      },
+      "types": {
+        "import": {
+          "default": "./lib/index.d.ts",
+          "types": "./lib/index.d.ts"
+        }
       }
     },
     "./full": {
@@ -17,14 +24,15 @@
         "default": "./lib/index.js",
         "types": "./lib/index.d.ts"
       }
-    }
+    },
+    "./package.json": "./package.json"
   },
   "scripts": {
     "prepublishOnly": "npm run build:node && npm run test",
     "build": "tsc",
     "build:node": "tsc --module node16 --outDir ./lib/ &&  esbuild lib/index.js --bundle --outfile=lib/index.min.js --platform=node --format=esm --minify --sourcemap",
     "dev:wrangler": "wrangler dev --port 8787",
-    "dev:node": "esbuild src/index.js --bundle --outfile=lib/index.js --platform=node --format=esm --watch=forever & nodemon --w './src/*.js' --exec 'node  --max-old-space-size=4096 --env-file ./.env ./dev/node-dev.js'",
+    "dev:node": "nodemon --watch './src/index.ts' --delay 2.5 -L --verbose --exec 'tsc --module node16 --outDir ./lib/ && node --max-old-space-size=4096 --env-file ./.env ./dev/node-dev.js'",
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js --config node.jest.config.json --no-cache",
     "clean": "rm -rf lib"
   },
@@ -43,7 +51,22 @@
   "engines": {
     "node": ">=16"
   },
-  "keywords": [],
+  "keywords": [
+    "api",
+    "amazon",
+    "minio",
+    "cloud",
+    "s3",
+    "storage",
+    "aws",
+    "cloudflare",
+    "cloudflare-r2",
+    "cloudflare-storage",
+    "azure",
+    "google",
+    "google-cloud",
+    "ceph"
+  ],
   "author": "Peter Jensen @ SentienHQ",
   "license": "MIT",
   "bugs": {

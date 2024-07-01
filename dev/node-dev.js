@@ -172,6 +172,13 @@ app.get('get/:dir/:key', async c => {
   return c.json('ok');
 });
 
+app.get('/get-stream/:key', async c => {
+  const s3 = new S3(configCFS3);
+  const key = c.req.param('key');
+  const resp = await s3.getStream(key, false, 0, 7 * 1024 * 1024);
+  return c.text(resp);
+});
+
 app.get('list/:prefix', async c => {
   const s3 = new S3(configCFS3);
   const prefix = c.req.param('prefix');
