@@ -616,33 +616,32 @@ class S3 {
   }
 
   /**
-   * Get a stream of an object from the bucket.
+   * Get a response of an object from the bucket.
    * @param {string} key - The key of the object to get.
    * @param {boolean} [wholeFile=true] - Whether to get the whole file or a part.
    * @param {number} [rangeFrom=0] - The range from to get if not getting the whole file.
-   * @param {number} [rangeTo=this.maxRequestSizeInBytes] - The range to to get if not getting the whole file.
+   * @param {number} [rangeTo=this.maxRequestSizeInBytes] - The range to to get if not getting the whole file. Note: rangeTo is inclusive.
    * @param {Object} [opts={}] - Additional options for the get operation.
-   * @returns {Promise<ReadableStream>} A readable stream of the object content.
+   * @returns {Promise<Response>} Response of the object content. Use readableStream() to get the stream from .body.
    */
-  async getStream(
+  async getResponse(
     key: string,
     wholeFile: boolean = true,
     rangeFrom: number = 0,
     rangeTo: number = this.maxRequestSizeInBytes,
     opts: Record<string, any> = {},
-  ): Promise<ReadableStream | null> {
+  ): Promise<Response> {
     const query = opts;
     const headers = {
       [HEADER_CONTENT_TYPE]: JSON_CONTENT_TYPE,
       [HEADER_AMZ_CONTENT_SHA256]: UNSIGNED_PAYLOAD,
-      ...(wholeFile ? {} : { range: `bytes=${rangeFrom}-${rangeTo}` }),
+      ...(wholeFile ? {} : { range: `bytes=${rangeFrom}-${rangeTo - 1}` }),
     };
     const encodedKey = uriResourceEscape(key);
     const { url, headers: signedHeaders } = await this._sign('GET', encodedKey, query, headers, '');
     const urlWithQuery = `${url}?${new URLSearchParams(query)}`;
 
-    const res = await this._sendRequest(urlWithQuery, 'GET', signedHeaders);
-    return res.body;
+    return this._sendRequest(urlWithQuery, 'GET', signedHeaders);
   }
 
   /**

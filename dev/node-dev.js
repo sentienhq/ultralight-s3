@@ -173,10 +173,28 @@ app.get('get/:dir/:key', async c => {
 });
 
 app.get('/get-stream/:key', async c => {
-  const s3 = new S3(configCFS3);
-  const key = c.req.param('key');
-  const resp = await s3.getStream(key, false, 0, 7 * 1024 * 1024);
-  return c.text(resp);
+  try {
+    console.time();
+    const s3 = new S3(configCFS3);
+    const key = c.req.param('key');
+    const resp = await s3.getResponse(key, false, 0, 7 * 1024 * 1024);
+    // const chunks = [];
+    // for await (let chunk of resp) {
+    //   chunks.push(chunk);
+    // }
+    // const buf = Buffer.concat(chunks);
+    // const bufLength = Buffer.byteLength(buf);
+
+    console.log('resp::: lenght ', parseInt(resp.readableLength, 10));
+    console.timeEnd();
+    return c.text(resp);
+  } catch (error) {
+    console.error('Errorrrrr:', error);
+    if (error.toString().indexOf('status 404: Unknown - Not Found') > -1) {
+      return c.json({ error: '404 Not Found' });
+    }
+    return c.json({ error: 'Failed to get stream' });
+  }
 });
 
 app.get('list/:prefix', async c => {
@@ -198,8 +216,8 @@ app.get('/', async c => {
   const s3list = await s3.list();
   // const collected = [];
 
-  // const jsonStream = s3.getStream(s3list[0].key).body;
-  // await (await s3.getStream(s3list[0].key)).pipeThrough(new JSONParseStream('$.*')).pipeTo(
+  // const jsonStream = s3.getResponse(s3list[0].key).body;
+  // await (await s3.getResponse(s3list[0].key)).pipeThrough(new JSONParseStream('$.*')).pipeTo(
   //   new WritableStream({
   //     write(obj) {
   //       collected.push(obj);

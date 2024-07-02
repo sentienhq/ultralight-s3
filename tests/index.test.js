@@ -211,16 +211,27 @@ describe('S3 class', () => {
     const content = 'This is a test for streaming';
     await s3.put(key, content);
 
-    const s3stream = await s3.getStream(key);
-    expect(s3stream).toBeTruthy();
+    const s3stream = await s3.getResponse(key);
+    expect(s3stream.body).toBeTruthy();
 
     let streamContent = [];
-    for await (const chunk of s3stream) {
+    for await (const chunk of s3stream.body) {
       // convert Buffer bytes to string
       streamContent.push(Buffer.from(chunk));
     }
     const streamContentString = Buffer.concat(streamContent).toString('utf-8');
     expect(streamContentString).toBe(content);
+
+    // try ranged request
+    const s3streamRange = await s3.getResponse(key, false, 0, 7);
+    expect(s3streamRange.body).toBeTruthy();
+    let streamContentRange = [];
+    for await (const chunk of s3streamRange.body) {
+      // convert Buffer bytes to string
+      streamContentRange.push(Buffer.from(chunk));
+    }
+    const streamContentStringRange = Buffer.concat(streamContentRange).toString('utf-8');
+    expect(streamContentStringRange).toBe(content.slice(0, 7));
 
     // Verify with Minio client
     const minioStream = await new Promise((resolve, reject) => {

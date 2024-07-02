@@ -59,11 +59,11 @@ const data = await s3.get('path/to/life.txt');
 console.log(data);
 
 // get a stream of a large file (first chunk)
-const firstChunk = await s3.getStream('path/to/large-file.mp4', false, 0);
+const firstChunk = await s3.getResponse('path/to/large-file.mp4', false, 0).body;
 
 // get a stream of a large file (all chunks)
-const allChunks = await s3.getStream('path/to/large-file.mp4', true);
-for await (const chunk of allChunks) {
+const allChunks = await s3.getResponse('path/to/large-file.mp4', true);
+for await (const chunk of allChunks.body) {
   console.log(chunk);
 }
 
@@ -201,16 +201,16 @@ Not tested, but should work with other S3 compatible services. Full list - soon 
 - **Behavior**: Retrieves an object from the bucket.
 - **Returns**: Promise<string\>: A promise that resolves to the content of the object.
 
-**getStream(key: string, wholeFile?: boolean, rangeFrom?: number, rangeTo?: number, opts?: Object): Promise<ReadableStream | null\>**
+**getResponse(key: string, wholeFile?: boolean, rangeFrom?: number, rangeTo?: number, opts?: Object): Promise<Response\>**
 
 - **Input**:
   - `key: string`: The key of the object to get.
   - `wholeFile?: boolean` (optional): Whether to get the whole file or a part (default: true).
   - `rangeFrom?: number` (optional): The byte range from to get if not getting the whole file (default: 0).
-  - `rangeTo?: number` (optional): The byte range to to get if not getting the whole file (default: maxRequestSizeInBytes).
+  - `rangeTo?: number` (optional): The byte range to to get if not getting the whole file (default: maxRequestSizeInBytes). Note: rangeTo is inclusive.
   - `opts?: Object` (optional): Additional options for the get operation.
-- **Behavior**: Retrieves a readable stream of an object from the bucket.
-- **Returns**: Promise<ReadableStream | null>: A promise that resolves to a ReadableStream of the object content.
+- **Behavior**: Retrieves a response of an object from the bucket.
+- **Returns**: Promise<Response\>: A promise that resolves to a Response of the object content. Use readableStream() to get the stream from .body.
 
 **delete(key: string): Promise<string>**
 
