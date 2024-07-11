@@ -12,17 +12,19 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v3
+
       - name: Start Docker image
         run: docker-compose -f tests/compose.yaml up -d
+
       - uses: actions/setup-node@v3
         with:
           node-version: 16
+
       - name: Install dependencies
-      - run: npm install
+        run: npm install
+
       - name: Build project
-      - run: npm run build:node
+        run: npm run build:node
+
       - name: Run e2e tests
-      - run: npm test
-      - name: Stop Docker image
-        if: always()
-        run: docker-compose -f tests/compose.yaml down
+        run: npm test
