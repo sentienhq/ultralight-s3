@@ -10,8 +10,8 @@ const testConfigR2 = {
   endpoint: '127.0.0.1',
   port: 9000,
   region: 'auto',
-  accessKeyId: 'AKIAIOSFODNN7EXAMPLE',
-  secretAccessKey: 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY',
+  accessKeyId: 'minio_user',
+  secretAccessKey: 'minio_password',
   bucketName: 'test-bucket',
 };
 
@@ -64,6 +64,31 @@ describe('S3 class', () => {
         .on('error', reject)
         .on('end', () => resolve(objects));
     });
+    expect(minioList.some(item => item.name === testKey)).toBe(true);
+  });
+
+  test('should be able to list objects with prefix', async () => {
+    const testKey = 'list-test-object';
+    const testContent = 'List test content';
+
+    await s3.put(testKey, testContent);
+
+    const s3list = await s3.list('/', 'list-test');
+    expect(s3list).toBeInstanceOf(Array);
+    expect(s3list.length).toBe(1);
+    expect(s3list.some(item => item.key === testKey)).toBe(true);
+
+    // Verify with Minio client
+    const minioList = await new Promise((resolve, reject) => {
+      const objects = [];
+      minioClient
+        .listObjects(testConfigR2.bucketName, 'list-test', true)
+        .on('data', obj => objects.push(obj))
+        .on('error', reject)
+        .on('end', () => resolve(objects));
+    });
+    // check exact match of key and quantity
+    expect(minioList.length).toBe(1);
     expect(minioList.some(item => item.name === testKey)).toBe(true);
   });
 

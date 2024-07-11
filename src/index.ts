@@ -1,7 +1,5 @@
 'use strict';
 
-import { parse } from 'node:path';
-
 interface S3Config {
   accessKeyId: string;
   secretAccessKey: string;
@@ -82,7 +80,7 @@ const HEADER_ETAG = 'etag';
 const HEADER_LAST_MODIFIED = 'last-modified';
 
 // Error messages
-const ERROR_PREFIX = 'ultralight-s3 Module: ';
+export const ERROR_PREFIX = 'ultralight-s3 Module: ';
 const ERROR_ACCESS_KEY_REQUIRED = `${ERROR_PREFIX}accessKeyId must be a non-empty string`;
 const ERROR_SECRET_KEY_REQUIRED = `${ERROR_PREFIX}secretAccessKey must be a non-empty string`;
 const ERROR_ENDPOINT_REQUIRED = `${ERROR_PREFIX}endpoint must be a non-empty string`;
@@ -92,9 +90,10 @@ const ERROR_UPLOAD_ID_REQUIRED = `${ERROR_PREFIX}uploadId must be a non-empty st
 const ERROR_PARTS_REQUIRED = `${ERROR_PREFIX}parts must be a non-empty array`;
 const ERROR_INVALID_PART = `${ERROR_PREFIX}Each part must have a partNumber (number) and ETag (string)`;
 const ERROR_DATA_BUFFER_REQUIRED = `${ERROR_PREFIX}data must be a Buffer or string`;
-const ERROR_PATH_REQUIRED = `${ERROR_PREFIX}path must be a string`;
+// const ERROR_PATH_REQUIRED = `${ERROR_PREFIX}path must be a string`;
 const ERROR_PREFIX_TYPE = `${ERROR_PREFIX}prefix must be a string`;
 const ERROR_MAX_KEYS_TYPE = `${ERROR_PREFIX}maxKeys must be a positive integer`;
+const ERROR_DELIMITER_REQUIRED = `${ERROR_PREFIX}delimiter must be a string`;
 
 const expectArray: { [key: string]: boolean } = {
   contents: true,
@@ -193,6 +192,48 @@ class S3 {
     if (typeof endpoint !== 'string' || endpoint.trim().length === 0) throw new TypeError(ERROR_ENDPOINT_REQUIRED);
     if (typeof bucketName !== 'string' || bucketName.trim().length === 0)
       throw new TypeError(ERROR_BUCKET_NAME_REQUIRED);
+  }
+
+  private _checkMethodHeadnGet(method: string): void {
+    if (method !== 'GET' && method !== 'HEAD') {
+      this._log('error', `${ERROR_PREFIX}method must be either GET or HEAD`);
+      throw new Error('method must be either GET or HEAD');
+    }
+  }
+
+  private _checkKey(key: string): void {
+    if (typeof key !== 'string' || key.trim().length === 0) {
+      this._log('error', ERROR_KEY_REQUIRED);
+      throw new TypeError(ERROR_KEY_REQUIRED);
+    }
+  }
+
+  private _checkDelimiter(delimiter: string): void {
+    if (typeof delimiter !== 'string' || delimiter.trim().length === 0) {
+      this._log('error', ERROR_DELIMITER_REQUIRED);
+      throw new TypeError(ERROR_DELIMITER_REQUIRED);
+    }
+  }
+
+  private _checkPrefix(prefix: string): void {
+    if (typeof prefix !== 'string') {
+      this._log('error', ERROR_PREFIX_TYPE);
+      throw new TypeError(ERROR_PREFIX_TYPE);
+    }
+  }
+
+  private _checkMaxKeys(maxKeys: number): void {
+    if (typeof maxKeys !== 'number' || maxKeys <= 0) {
+      this._log('error', ERROR_MAX_KEYS_TYPE);
+      throw new TypeError(ERROR_MAX_KEYS_TYPE);
+    }
+  }
+
+  private _checkOpts(opts: Record<string, any>): void {
+    if (typeof opts !== 'object') {
+      this._log('error', `${ERROR_PREFIX}opts must be an object`);
+      throw new TypeError(`${ERROR_PREFIX}opts must be an object`);
+    }
   }
 
   /**
@@ -297,10 +338,7 @@ class S3 {
    * @throws {TypeError} If the key is not a non-empty string.
    */
   async getContentLength(key: string): Promise<number> {
-    if (typeof key !== 'string' || key.trim().length === 0) {
-      this._log('error', ERROR_KEY_REQUIRED);
-      throw new TypeError(ERROR_KEY_REQUIRED);
-    }
+    this._checkKey(key);
     const headers = {
       [HEADER_AMZ_CONTENT_SHA256]: UNSIGNED_PAYLOAD,
     };
@@ -356,10 +394,7 @@ class S3 {
    * @throws {TypeError} If the key is not a non-empty string.
    */
   async fileExists(key: string): Promise<boolean> {
-    if (typeof key !== 'string' || key.trim().length === 0) {
-      this._log('error', ERROR_KEY_REQUIRED);
-      throw new TypeError(ERROR_KEY_REQUIRED);
-    }
+    this._checkKey(key);
     const headers = { [HEADER_AMZ_CONTENT_SHA256]: UNSIGNED_PAYLOAD };
     const encodedKey = uriResourceEscape(key);
     const { url, headers: signedHeaders } = await this._sign('HEAD', encodedKey, {}, headers, '');
@@ -459,8 +494,8 @@ class S3 {
 
   /**
    * List objects in the bucket.
-   * @param {string} [path='/'] - The path to list objects from.
-   * @param {string} [prefix=''] - The prefix to filter objects.
+   * @param {string} [delimiter='/'] - The delimiter to use for grouping objects in specific path.
+   * @param {string} [prefix=''] - The prefix to filter objects in specific path.
    * @param {number} [maxKeys=1000] - The maximum number of keys to return.
    * @param {string} [method='GET'] - The HTTP method to use (GET or HEAD).
    * @param {Object} [opts={}] - Additional options for the list operation.
@@ -468,34 +503,18 @@ class S3 {
    * @throws {TypeError} If any of the parameters are of incorrect type.
    */
   async list(
-    path: string = '/',
+    delimiter: string = '/',
     prefix: string = '',
     maxKeys: number = 1000,
     method: HttpMethod = 'GET',
     opts: Object = {},
   ): Promise<Object | Array<Object>> {
-    if (typeof path !== 'string' || path.trim().length === 0) {
-      this._log('error', ERROR_PATH_REQUIRED);
-      throw new TypeError(ERROR_PATH_REQUIRED);
-    }
-    if (typeof prefix !== 'string') {
-      this._log('error', ERROR_PREFIX_TYPE);
-      throw new TypeError(ERROR_PREFIX_TYPE);
-    }
-    if (!Number.isInteger(maxKeys) || maxKeys <= 0) {
-      this._log('error', ERROR_MAX_KEYS_TYPE);
-      throw new TypeError(ERROR_MAX_KEYS_TYPE);
-    }
-    if (method !== 'GET' && method !== 'HEAD') {
-      this._log('error', `${ERROR_PREFIX}method must be either GET or HEAD`);
-      throw new TypeError(`${ERROR_PREFIX}method must be either GET or HEAD`);
-    }
-    if (typeof opts !== 'object') {
-      this._log('error', `${ERROR_PREFIX}opts must be an object`);
-      throw new TypeError(`${ERROR_PREFIX}opts must be an object`);
-    }
-
-    this._log('info', `Listing objects in ${path}`);
+    this._checkDelimiter(delimiter);
+    this._checkPrefix(prefix);
+    this._checkMaxKeys(maxKeys);
+    this._checkMethodHeadnGet(method);
+    this._checkOpts(opts);
+    this._log('info', `Listing objects in ${prefix}`);
 
     const query = {
       'list-type': LIST_TYPE,
@@ -509,7 +528,7 @@ class S3 {
       [HEADER_CONTENT_TYPE]: JSON_CONTENT_TYPE,
       [HEADER_AMZ_CONTENT_SHA256]: UNSIGNED_PAYLOAD,
     };
-    const encodedKey = path === '/' ? path : uriEscape(path);
+    const encodedKey = delimiter === '/' ? delimiter : uriEscape(delimiter);
     const { url, headers: signedHeaders } = await this._sign('GET', encodedKey, query, headers, '');
     const urlWithQuery = `${url}?${new URLSearchParams(query)}`;
     const res = await this._sendRequest(urlWithQuery, 'GET', signedHeaders);
@@ -534,37 +553,24 @@ class S3 {
 
   /**
    * List multipart uploads in the bucket.
-   * @param {string} [path='/'] - The path to list objects from.
-   * @param {string} [prefix=''] - The prefix to filter objects.
+   * @param {string} [delimiter='/'] - The delimiter to use for grouping objects in specific path.
+   * @param {string} [prefix=''] - The prefix to filter objects in specific path.
    * @param {string} [method='GET'] - The HTTP method to use (GET or HEAD).
    * @param {Object} [opts={}] - Additional options for the list operation.
    * @returns {Promise<Object|Array>} The list of objects or object metadata.
    * @throws {TypeError} If any of the parameters are of incorrect type.
    */
   async listMultiPartUploads(
-    path: string = '/',
+    delimiter: string = '/',
     prefix: string = '',
     method: HttpMethod = 'GET',
     opts: Object = {},
   ): Promise<any> {
-    if (typeof path !== 'string' || path.trim().length === 0) {
-      this._log('error', ERROR_PATH_REQUIRED);
-      throw new TypeError(ERROR_PATH_REQUIRED);
-    }
-    if (typeof prefix !== 'string') {
-      this._log('error', ERROR_PREFIX_TYPE);
-      throw new TypeError(ERROR_PREFIX_TYPE);
-    }
-    if (method !== 'GET' && method !== 'HEAD') {
-      this._log('error', `${ERROR_PREFIX}method must be either GET or HEAD`);
-      throw new TypeError(`${ERROR_PREFIX}method must be either GET or HEAD`);
-    }
-    if (typeof opts !== 'object') {
-      this._log('error', `${ERROR_PREFIX}opts must be an object`);
-      throw new TypeError(`${ERROR_PREFIX}opts must be an object`);
-    }
-
-    this._log('info', `Listing multipart uploads in ${path}`);
+    this._checkDelimiter(delimiter);
+    this._checkPrefix(prefix);
+    this._checkMethodHeadnGet(method);
+    this._checkOpts(opts);
+    this._log('info', `Listing multipart uploads in ${prefix}`);
 
     const query = {
       uploads: '',
@@ -574,7 +580,7 @@ class S3 {
       [HEADER_CONTENT_TYPE]: JSON_CONTENT_TYPE,
       [HEADER_AMZ_CONTENT_SHA256]: UNSIGNED_PAYLOAD,
     };
-    const encodedKey = path === '/' ? path : uriEscape(path);
+    const encodedKey = delimiter === '/' ? delimiter : uriEscape(delimiter);
     const { url, headers: signedHeaders } = await this._sign('GET', encodedKey, query, headers, '');
     const urlWithQuery = `${url}?${new URLSearchParams(query)}`;
     const res = await this._sendRequest(urlWithQuery, 'GET', signedHeaders);
@@ -600,15 +606,13 @@ class S3 {
    * @returns {Promise<string>} The content of the object.
    */
   async get(key: string, opts: Record<string, any> = {}): Promise<string> {
-    if (typeof key !== 'string' || key.trim().length === 0) {
-      this._log('error', ERROR_KEY_REQUIRED);
-      throw new TypeError(ERROR_KEY_REQUIRED);
-    }
+    this._checkKey(key);
+    this._log('info', `Getting object ${key}`);
+
     const headers = {
       [HEADER_CONTENT_TYPE]: JSON_CONTENT_TYPE,
       [HEADER_AMZ_CONTENT_SHA256]: UNSIGNED_PAYLOAD,
     };
-    this._log('info', `Getting object ${key}`);
     const encodedKey = uriResourceEscape(key);
     const { url, headers: signedHeaders } = await this._sign('GET', encodedKey, opts, headers, '');
     const res = await this._sendRequest(url, 'GET', signedHeaders);
@@ -631,6 +635,7 @@ class S3 {
     rangeTo: number = this.maxRequestSizeInBytes,
     opts: Record<string, any> = {},
   ): Promise<Response> {
+    this._checkKey(key);
     const query = opts;
     const headers = {
       [HEADER_CONTENT_TYPE]: JSON_CONTENT_TYPE,
@@ -652,10 +657,7 @@ class S3 {
    * @throws {TypeError} If the key is not a non-empty string or data is not a Buffer or string.
    */
   async put(key: string, data: string | Buffer): Promise<Object> {
-    if (typeof key !== 'string' || key.trim().length === 0) {
-      this._log('error', ERROR_KEY_REQUIRED);
-      throw new TypeError(ERROR_KEY_REQUIRED);
-    }
+    this._checkKey(key);
     if (!(data instanceof Buffer || typeof data === 'string')) {
       this._log('error', ERROR_DATA_BUFFER_REQUIRED);
       throw new TypeError(ERROR_DATA_BUFFER_REQUIRED);
@@ -681,10 +683,7 @@ class S3 {
    * @throws {Error} If the multipart upload initiation fails.
    */
   async getMultipartUploadId(key: string, fileType: string = DEFAULT_STREAM_CONTENT_TYPE): Promise<string> {
-    if (typeof key !== 'string' || key.trim().length === 0) {
-      this._log('error', ERROR_KEY_REQUIRED);
-      throw new TypeError(ERROR_KEY_REQUIRED);
-    }
+    this._checkKey(key);
     if (typeof fileType !== 'string') {
       this._log('error', `${ERROR_PREFIX}fileType must be a string`);
       throw new TypeError(`${ERROR_PREFIX}fileType must be a string`);
@@ -763,10 +762,7 @@ class S3 {
   }
 
   _validateUploadPartParams(key: string, data: Buffer | string, uploadId: string, partNumber: number, opts: Object) {
-    if (typeof key !== 'string' || key.trim().length === 0) {
-      this._log('error', ERROR_KEY_REQUIRED);
-      throw new TypeError(ERROR_KEY_REQUIRED);
-    }
+    this._checkKey(key);
     if (!(data instanceof Buffer || typeof data === 'string')) {
       this._log('error', ERROR_DATA_BUFFER_REQUIRED);
       throw new TypeError(ERROR_DATA_BUFFER_REQUIRED);
@@ -779,10 +775,7 @@ class S3 {
       this._log('error', `${ERROR_PREFIX}partNumber must be a positive integer`);
       throw new TypeError(`${ERROR_PREFIX}partNumber must be a positive integer`);
     }
-    if (typeof opts !== 'object') {
-      this._log('error', `${ERROR_PREFIX}opts must be an object`);
-      throw new TypeError(`${ERROR_PREFIX}opts must be an object`);
-    }
+    this._checkOpts(opts);
   }
 
   /**
@@ -799,10 +792,7 @@ class S3 {
     uploadId: string,
     parts: Array<UploadPart>,
   ): Promise<CompleteMultipartUploadResult> {
-    if (typeof key !== 'string' || key.trim().length === 0) {
-      this._log('error', ERROR_KEY_REQUIRED);
-      throw new TypeError(ERROR_KEY_REQUIRED);
-    }
+    this._checkKey(key);
     if (typeof uploadId !== 'string' || uploadId.trim().length === 0) {
       this._log('error', ERROR_UPLOAD_ID_REQUIRED);
       throw new TypeError(ERROR_UPLOAD_ID_REQUIRED);
@@ -856,10 +846,7 @@ class S3 {
    */
   async abortMultipartUpload(key: string, uploadId: string): Promise<object> {
     // Input validation
-    if (typeof key !== 'string' || key.trim().length === 0) {
-      this._log('error', ERROR_KEY_REQUIRED);
-      throw new TypeError(ERROR_KEY_REQUIRED);
-    }
+    this._checkKey(key);
     if (typeof uploadId !== 'string' || uploadId.trim().length === 0) {
       this._log('error', ERROR_UPLOAD_ID_REQUIRED);
       throw new TypeError(ERROR_UPLOAD_ID_REQUIRED);
@@ -940,10 +927,7 @@ class S3 {
    * @returns {Promise<string>} The response from the delete operation.
    */
   async delete(key: string): Promise<string> {
-    if (typeof key !== 'string' || key.trim().length === 0) {
-      this._log('error', ERROR_KEY_REQUIRED);
-      throw new TypeError(ERROR_KEY_REQUIRED);
-    }
+    this._checkKey(key);
     this._log('info', `Deleting object ${key}`);
     const headers = {
       [HEADER_CONTENT_TYPE]: JSON_CONTENT_TYPE,

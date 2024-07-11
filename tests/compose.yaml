@@ -12,6 +12,4 @@ services:
       MINIO_ROOT_PASSWORD: 'minio_password'
       MINIO_ADDRESS: ':9000'
       MINIO_CONSOLE_ADDRESS: ':9001'
-      MINIO_ACCESS_KEY: 'AKIAIOSFODNN7EXAMPLE'
-      MINIO_SECRET_KEY: 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY'
     command: minio server /data

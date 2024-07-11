@@ -177,17 +177,18 @@ app.get('/get-stream/:key', async c => {
     console.time();
     const s3 = new S3(configCFS3);
     const key = c.req.param('key');
-    const resp = await s3.getResponse(key, false, 0, 7 * 1024 * 1024);
-    // const chunks = [];
-    // for await (let chunk of resp) {
-    //   chunks.push(chunk);
-    // }
-    // const buf = Buffer.concat(chunks);
-    // const bufLength = Buffer.byteLength(buf);
-
-    console.log('resp::: lenght ', parseInt(resp.readableLength, 10));
+    const resp = await s3.get(key);
+    // console.log('resp::: lenght ', resp.length);
+    // const resp = await s3.getResponse(key, false, 0, 7 * 1024 * 1024);
+    //const body = await resp.text();
+    // const buf = await buffer(resp);
+    const buf = Buffer.from(resp, 'utf8');
+    const bufLength = Buffer.byteLength(buf);
+    console.log('resp::: lenght ', bufLength, resp.length);
+    // const contentLength = resp.headers.get('content-length');
+    // console.log('resp::: lenght ', parseInt(contentLength ? parseInt(contentLength, 10) : 0, 10));
     console.timeEnd();
-    return c.text(resp);
+    return c.text(buf);
   } catch (error) {
     console.error('Errorrrrr:', error);
     if (error.toString().indexOf('status 404: Unknown - Not Found') > -1) {

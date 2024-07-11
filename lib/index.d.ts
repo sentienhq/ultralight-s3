@@ -36,6 +36,7 @@ interface CompleteMultipartUploadResult {
     ETag: string;
 }
 type HttpMethod = 'POST' | 'GET' | 'HEAD' | 'PUT' | 'DELETE';
+export declare const ERROR_PREFIX = "ultralight-s3 Module: ";
 /**
  * S3 class for interacting with S3-compatible object storage services.
  * This class provides methods for common S3 operations such as uploading, downloading,
@@ -86,6 +87,12 @@ declare class S3 {
     private logger?;
     constructor({ accessKeyId, secretAccessKey, endpoint, bucketName, region, maxRequestSizeInBytes, requestAbortTimeout, logger, }: S3Config);
     private _validateConstructorParams;
+    private _checkMethodHeadnGet;
+    private _checkKey;
+    private _checkDelimiter;
+    private _checkPrefix;
+    private _checkMaxKeys;
+    private _checkOpts;
     /**
      * Internal method to log messages with sanitized sensitive information.
      * @param {string} level - The log level (e.g., 'info', 'warn', 'error').
@@ -143,25 +150,25 @@ declare class S3 {
     _buildAuthorizationHeader(datetime: string, signedHeaders: string, signature: string): string;
     /**
      * List objects in the bucket.
-     * @param {string} [path='/'] - The path to list objects from.
-     * @param {string} [prefix=''] - The prefix to filter objects.
+     * @param {string} [delimiter='/'] - The delimiter to use for grouping objects in specific path.
+     * @param {string} [prefix=''] - The prefix to filter objects in specific path.
      * @param {number} [maxKeys=1000] - The maximum number of keys to return.
      * @param {string} [method='GET'] - The HTTP method to use (GET or HEAD).
      * @param {Object} [opts={}] - Additional options for the list operation.
      * @returns {Promise<Object|Array>} The list of objects or object metadata.
      * @throws {TypeError} If any of the parameters are of incorrect type.
      */
-    list(path?: string, prefix?: string, maxKeys?: number, method?: HttpMethod, opts?: Object): Promise<Object | Array<Object>>;
+    list(delimiter?: string, prefix?: string, maxKeys?: number, method?: HttpMethod, opts?: Object): Promise<Object | Array<Object>>;
     /**
      * List multipart uploads in the bucket.
-     * @param {string} [path='/'] - The path to list objects from.
-     * @param {string} [prefix=''] - The prefix to filter objects.
+     * @param {string} [delimiter='/'] - The delimiter to use for grouping objects in specific path.
+     * @param {string} [prefix=''] - The prefix to filter objects in specific path.
      * @param {string} [method='GET'] - The HTTP method to use (GET or HEAD).
      * @param {Object} [opts={}] - Additional options for the list operation.
      * @returns {Promise<Object|Array>} The list of objects or object metadata.
      * @throws {TypeError} If any of the parameters are of incorrect type.
      */
-    listMultiPartUploads(path?: string, prefix?: string, method?: HttpMethod, opts?: Object): Promise<any>;
+    listMultiPartUploads(delimiter?: string, prefix?: string, method?: HttpMethod, opts?: Object): Promise<any>;
     /**
      * Get an object from the bucket.
      * @param {string} key - The key of the object to get.

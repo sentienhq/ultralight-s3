@@ -2,11 +2,9 @@
 
 ~15KB lightweight S3 client with zero dependencies, designed for Node.js, edge computing like Cloudflare workers, AWS Lambda (and browsers - not implemented yet).
 
-![npm package version](https://img.shields.io/npm/v/ultralight-s3)
-![npm package minimized gzipped size](https://img.shields.io/bundlejs/size/ultralight-s3)
-![NPM License](https://img.shields.io/npm/l/ultralight-s3)
-
-![GitHub Issues or Pull Requests](https://img.shields.io/github/issues/sentienhq/ultralight-s3)
+[![npm package version](https://img.shields.io/npm/v/ultralight-s3)](https://www.npmjs.com/package/ultralight-s3)
+![npm package minimized gzipped size](https://img.shields.io/bundlejs/size/ultralight-s3)[![NPM License](https://img.shields.io/npm/l/ultralight-s3)](https://github.com/sentienhq/ultralight-s3/blob/main/LICENSE.md)
+[![GitHub Issues or Pull Requests](https://img.shields.io/github/issues/sentienhq/ultralight-s3)](https://github.com/sentienhq/ultralight-s3/issues)
 
 ## Features
 
@@ -48,7 +46,9 @@ const s3 = new S3({
 });
 
 // List objects
-const objects = await s3.list('/');
+const objects = await s3.list();
+// or with prefix
+// const specificObjectsUnderPrefix = await s3.list('/', 'prefix');
 console.log(objects);
 
 // Check if a file exists
@@ -174,11 +174,11 @@ Not tested, but should work with other S3 compatible services. Full list - soon 
 - **Behavior**: Creates a new instance of the S3 class with the provided configuration.
 - **Returns**: S3: An instance of the S3 class.
 
-**list(path?: string, prefix?: string, maxKeys?: number, method?: string, opts?: Object): Promise<Array<Object\>>**
+**list(delimiter?: string, prefix?: string, maxKeys?: number, method?: string, opts?: Object): Promise<Array<Object\>>**
 
 - **Input**:
-  - `path?: string` (optional): The path to list objects from (default: '/').
-  - `prefix?: string` (optional): The prefix to filter objects (default: '').
+  - `delimiter?: string` (optional): The delimiter to use for grouping objects in specific path (default: '/').
+  - `prefix?: string` (optional): The prefix to filter objects in specific path (default: '').
   - `maxKeys?: number` (optional): The maximum number of keys to return (default: 1000).
   - `method?: string` (optional): The HTTP method to use (default: 'GET').
   - `opts?: Object` (optional): Additional options for the list operation.
@@ -229,6 +229,16 @@ Not tested, but should work with other S3 compatible services. Full list - soon 
 - **Input**: `key: string`: The key of the object.
 - **Behavior**: Gets the content length of an object.
 - **Returns**: Promise<number\>: A promise that resolves to the content length of the object in bytes.
+
+**listMultiPartUploads(delimiter?: string, prefix?: string, method?: string, opts?: Object): Promise<Array<Object\>>**
+
+- **Input**:
+  - `delimiter?: string` (optional): The delimiter to use for grouping objects in specific path (default: '/').
+  - `prefix?: string` (optional): The prefix to filter objects in specific path (default: '').
+  - `method?: string` (optional): The HTTP method to use (default: 'GET').
+  - `opts?: Object` (optional): Additional options for the list operation.
+- **Behavior**: Lists multipart uploads in the bucket.
+- **Returns**: Promise<Array<Object\>\>: A promise that resolves to an array of multipart uploads or multipart upload metadata.
 
 **getMultipartUploadId(key: string, fileType?: string): Promise<string>**
 
