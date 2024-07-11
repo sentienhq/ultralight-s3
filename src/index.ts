@@ -924,9 +924,9 @@ class S3 {
   /**
    * Delete an object from the bucket.
    * @param {string} key - The key of the object to delete.
-   * @returns {Promise<string>} The response from the delete operation.
+   * @returns {Promise<boolean>} The response from the delete operation. True if the delete operation was successful, false otherwise. Note: The delete operation may return a 204 status code even if the object was not found.
    */
-  async delete(key: string): Promise<string> {
+  async delete(key: string): Promise<boolean> {
     this._checkKey(key);
     this._log('info', `Deleting object ${key}`);
     const headers = {
@@ -936,7 +936,10 @@ class S3 {
     const encodedKey = uriResourceEscape(key);
     const { url, headers: signedHeaders } = await this._sign('DELETE', encodedKey, {}, headers, '');
     const res = await this._sendRequest(url, 'DELETE', signedHeaders);
-    return res.text();
+    if (res.status === 204 || res.status === 200) {
+      return true;
+    }
+    return false;
   }
 
   async _sendRequest(

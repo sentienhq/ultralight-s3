@@ -212,11 +212,11 @@ Not tested, but should work with other S3 compatible services. Full list - soon 
 - **Behavior**: Retrieves a response of an object from the bucket.
 - **Returns**: Promise<Response\>: A promise that resolves to a Response of the object content. Use readableStream() to get the stream from .body.
 
-**delete(key: string): Promise<string>**
+**delete(key: string): Promise<boolean>**
 
 - **Input**: `key: string`: The key of the object to delete.
 - **Behavior**: Deletes an object from the bucket.
-- **Returns**: Promise<string\>: A promise that resolves to the response from the delete operation.
+- **Returns**: Promise<bollean\>: A promise that resolves to true if the delete operation was successful, false otherwise. ⚠️ Note: Delete will NOT return false if the object does not exist. Use fileExists() to check if an object exists before/after deleting it.
 
 **fileExists(key: string): Promise<boolean>**
 

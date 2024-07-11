@@ -237,9 +237,9 @@ declare class S3 {
     /**
      * Delete an object from the bucket.
      * @param {string} key - The key of the object to delete.
-     * @returns {Promise<string>} The response from the delete operation.
+     * @returns {Promise<boolean>} The response from the delete operation. True if the delete operation was successful, false otherwise. Note: The delete operation may return a 204 status code even if the object was not found.
      */
-    delete(key: string): Promise<string>;
+    delete(key: string): Promise<boolean>;
     _sendRequest(url: string, method: HttpMethod, headers: Record<string, string | any>, body?: string | Buffer): Promise<Response>;
     _handleErrorResponse(res: Response): Promise<void>;
     _buildCanonicalQueryString(queryParams: Object): string;

@@ -144,7 +144,11 @@ describe('S3 class', () => {
     const key = 'to-be-deleted';
     await s3.put(key, 'This will be deleted');
 
+    const exists1 = await s3.fileExists(key);
+    expect(exists1).toBe(true);
+
     await s3.delete(key);
+
     const exists = await s3.fileExists(key);
     expect(exists).toBe(false);
 
