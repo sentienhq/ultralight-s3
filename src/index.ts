@@ -1,5 +1,62 @@
 'use strict';
 
+// Constants
+const AWS_ALGORITHM = 'AWS4-HMAC-SHA256';
+const AWS_REQUEST_TYPE = 'aws4_request';
+const S3_SERVICE = 's3';
+const LIST_TYPE = '2';
+const UNSIGNED_PAYLOAD = 'UNSIGNED-PAYLOAD';
+const DEFAULT_STREAM_CONTENT_TYPE = 'application/octet-stream';
+const XML_CONTENT_TYPE = 'application/xml';
+const JSON_CONTENT_TYPE = 'application/json';
+// List of keys that might contain sensitive information
+const SENSITIVE_KEYS_REDACTED = ['accessKeyId', 'secretAccessKey', 'sessionToken', 'password'];
+const MIN_MAX_REQUEST_SIZE_IN_BYTES = 5 * 1024 * 1024;
+
+// Headers
+const HEADER_AMZ_CONTENT_SHA256 = 'x-amz-content-sha256';
+const HEADER_AMZ_DATE = 'x-amz-date';
+const HEADER_HOST = 'host';
+const HEADER_AUTHORIZATION = 'Authorization';
+const HEADER_CONTENT_TYPE = 'Content-Type';
+const HEADER_CONTENT_LENGTH = 'Content-Length';
+const HEADER_ETAG = 'etag';
+const HEADER_LAST_MODIFIED = 'last-modified';
+
+// Error messages
+const ERROR_PREFIX = 'ultralight-s3 Module: ';
+const ERROR_ACCESS_KEY_REQUIRED = `${ERROR_PREFIX}accessKeyId must be a non-empty string`;
+const ERROR_SECRET_KEY_REQUIRED = `${ERROR_PREFIX}secretAccessKey must be a non-empty string`;
+const ERROR_ENDPOINT_REQUIRED = `${ERROR_PREFIX}endpoint must be a non-empty string`;
+const ERROR_BUCKET_NAME_REQUIRED = `${ERROR_PREFIX}bucketName must be a non-empty string`;
+const ERROR_KEY_REQUIRED = `${ERROR_PREFIX}key must be a non-empty string`;
+const ERROR_UPLOAD_ID_REQUIRED = `${ERROR_PREFIX}uploadId must be a non-empty string`;
+const ERROR_PARTS_REQUIRED = `${ERROR_PREFIX}parts must be a non-empty array`;
+const ERROR_INVALID_PART = `${ERROR_PREFIX}Each part must have a partNumber (number) and ETag (string)`;
+const ERROR_DATA_BUFFER_REQUIRED = `${ERROR_PREFIX}data must be a Buffer or string`;
+// const ERROR_PATH_REQUIRED = `${ERROR_PREFIX}path must be a string`;
+const ERROR_PREFIX_TYPE = `${ERROR_PREFIX}prefix must be a string`;
+const ERROR_MAX_KEYS_TYPE = `${ERROR_PREFIX}maxKeys must be a positive integer`;
+const ERROR_DELIMITER_REQUIRED = `${ERROR_PREFIX}delimiter must be a string`;
+
+const STATUS_CODES: Record<string, string> = {
+  '200': 'OK',
+  '204': 'No Content',
+  '205': 'Reset Content',
+  '206': 'Partial Content',
+  '301': 'Moved Permanently',
+  '302': 'Found',
+  '400': 'Bad Request',
+  '401': 'Unauthorized',
+  '403': 'Forbidden',
+  '404': 'Not Found',
+  '418': "I'm a Teapot",
+  '428': 'Precondition Required',
+  '429': 'Too Many Requests',
+  '500': 'Internal Server Error',
+  '501': 'Not Implemented',
+};
+
 interface S3Config {
   accessKeyId: string;
   secretAccessKey: string;
@@ -55,45 +112,6 @@ if (typeof _createHmac === 'undefined' && typeof _createHash === 'undefined') {
     'ultralight-S3 Module: Crypto functions are not available, please report the issue with necessary description: https://github.com/sentienhq/ultralight-s3/issues',
   );
 }
-
-// Constants
-const AWS_ALGORITHM = 'AWS4-HMAC-SHA256';
-const AWS_REQUEST_TYPE = 'aws4_request';
-const S3_SERVICE = 's3';
-const LIST_TYPE = '2';
-const UNSIGNED_PAYLOAD = 'UNSIGNED-PAYLOAD';
-const DEFAULT_STREAM_CONTENT_TYPE = 'application/octet-stream';
-const XML_CONTENT_TYPE = 'application/xml';
-const JSON_CONTENT_TYPE = 'application/json';
-// List of keys that might contain sensitive information
-const SENSITIVE_KEYS_REDACTED = ['accessKeyId', 'secretAccessKey', 'sessionToken', 'password'];
-const MIN_MAX_REQUEST_SIZE_IN_BYTES = 5 * 1024 * 1024;
-
-// Headers
-const HEADER_AMZ_CONTENT_SHA256 = 'x-amz-content-sha256';
-const HEADER_AMZ_DATE = 'x-amz-date';
-const HEADER_HOST = 'host';
-const HEADER_AUTHORIZATION = 'Authorization';
-const HEADER_CONTENT_TYPE = 'Content-Type';
-const HEADER_CONTENT_LENGTH = 'Content-Length';
-const HEADER_ETAG = 'etag';
-const HEADER_LAST_MODIFIED = 'last-modified';
-
-// Error messages
-export const ERROR_PREFIX = 'ultralight-s3 Module: ';
-const ERROR_ACCESS_KEY_REQUIRED = `${ERROR_PREFIX}accessKeyId must be a non-empty string`;
-const ERROR_SECRET_KEY_REQUIRED = `${ERROR_PREFIX}secretAccessKey must be a non-empty string`;
-const ERROR_ENDPOINT_REQUIRED = `${ERROR_PREFIX}endpoint must be a non-empty string`;
-const ERROR_BUCKET_NAME_REQUIRED = `${ERROR_PREFIX}bucketName must be a non-empty string`;
-const ERROR_KEY_REQUIRED = `${ERROR_PREFIX}key must be a non-empty string`;
-const ERROR_UPLOAD_ID_REQUIRED = `${ERROR_PREFIX}uploadId must be a non-empty string`;
-const ERROR_PARTS_REQUIRED = `${ERROR_PREFIX}parts must be a non-empty array`;
-const ERROR_INVALID_PART = `${ERROR_PREFIX}Each part must have a partNumber (number) and ETag (string)`;
-const ERROR_DATA_BUFFER_REQUIRED = `${ERROR_PREFIX}data must be a Buffer or string`;
-// const ERROR_PATH_REQUIRED = `${ERROR_PREFIX}path must be a string`;
-const ERROR_PREFIX_TYPE = `${ERROR_PREFIX}prefix must be a string`;
-const ERROR_MAX_KEYS_TYPE = `${ERROR_PREFIX}maxKeys must be a positive integer`;
-const ERROR_DELIMITER_REQUIRED = `${ERROR_PREFIX}delimiter must be a string`;
 
 const expectArray: { [key: string]: boolean } = {
   contents: true,
@@ -413,7 +431,7 @@ class S3 {
       throw new Error(`${ERROR_PREFIX}Failed to check if file exists: ${errorMessage}`);
     }
   }
-  async _sign(
+  private async _sign(
     method: HttpMethod,
     keyPath: string,
     query: Object,
@@ -448,7 +466,7 @@ class S3 {
     return { url: url.toString(), headers };
   }
 
-  _buildCanonicalHeaders(headers: Record<string, string | number>): string {
+  private _buildCanonicalHeaders(headers: Record<string, string | number>): string {
     return Object.entries(headers)
       .map(([key, value]) => `${key.toLowerCase()}:${String(value).trim()}`)
       .sort()
@@ -483,7 +501,7 @@ class S3 {
     return _hmac(signingKey, stringToSign, 'hex');
   }
 
-  _buildAuthorizationHeader(datetime: string, signedHeaders: string, signature: string): string {
+  private _buildAuthorizationHeader(datetime: string, signedHeaders: string, signature: string): string {
     const credentialScope = [datetime.slice(0, 8), this.region, S3_SERVICE, AWS_REQUEST_TYPE].join('/');
     return [
       `${AWS_ALGORITHM} Credential=${this.accessKeyId}/${credentialScope}`,
@@ -492,6 +510,24 @@ class S3 {
     ].join(', ');
   }
 
+  private _filterIfHeaders(opts: Record<string, any>): {
+    filteredOpts: Record<string, any>;
+    conditionalHeaders: Record<string, string>;
+  } {
+    const filteredOpts: Record<string, any> = {};
+    const conditionalHeaders: Record<string, string> = {};
+    const ifHeaders = ['if-match', 'if-none-match', 'if-modified-since', 'if-unmodified-since'];
+
+    for (const [key, value] of Object.entries(opts)) {
+      if (ifHeaders.includes(key)) {
+        conditionalHeaders[key] = value;
+      } else {
+        filteredOpts[key] = value;
+      }
+    }
+
+    return { filteredOpts, conditionalHeaders };
+  }
   /**
    * List objects in the bucket.
    * @param {string} [delimiter='/'] - The delimiter to use for grouping objects in specific path.
@@ -608,15 +644,84 @@ class S3 {
   async get(key: string, opts: Record<string, any> = {}): Promise<string> {
     this._checkKey(key);
     this._log('info', `Getting object ${key}`);
-
+    const { filteredOpts, conditionalHeaders } = this._filterIfHeaders(opts);
     const headers = {
       [HEADER_CONTENT_TYPE]: JSON_CONTENT_TYPE,
       [HEADER_AMZ_CONTENT_SHA256]: UNSIGNED_PAYLOAD,
+      ...conditionalHeaders,
     };
     const encodedKey = uriResourceEscape(key);
-    const { url, headers: signedHeaders } = await this._sign('GET', encodedKey, opts, headers, '');
+    const { url, headers: signedHeaders } = await this._sign('GET', encodedKey, filteredOpts, headers, '');
     const res = await this._sendRequest(url, 'GET', signedHeaders);
     return res.text();
+  }
+
+  /**
+   *
+   * @param {string} key - The key of the object to get.
+   * @param {Object} [opts={}] - Additional options for the get operation.
+   * @returns {Promise<{ etag: string; data: string }>} The content of the object.
+   */
+  async getObjectWithETag(key: string, opts: Record<string, any> = {}): Promise<{ etag: string; data: string }> {
+    this._checkKey(key);
+    this._log('info', `Getting object ${key}`);
+    const { filteredOpts, conditionalHeaders } = this._filterIfHeaders(opts);
+    const headers = {
+      [HEADER_CONTENT_TYPE]: JSON_CONTENT_TYPE,
+      [HEADER_AMZ_CONTENT_SHA256]: UNSIGNED_PAYLOAD,
+      ...conditionalHeaders,
+    };
+    const encodedKey = uriResourceEscape(key);
+    const { url, headers: signedHeaders } = await this._sign('GET', encodedKey, filteredOpts, headers, '');
+    try {
+      const res = await this._sendRequest(url, 'GET', signedHeaders);
+      if (!res.ok) {
+        throw new Error(`Failed to get object. Status: ${res.status}`);
+      }
+
+      const etag = res.headers.get('etag');
+      if (!etag) {
+        throw new Error('ETag not found in response headers');
+      }
+      const data = await res.text();
+      return { etag, data };
+    } catch (error) {
+      this._log('error', `Error getting object ${key} with ETag: ${error}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Get the ETag of an object.
+   * @param {string} key - The key of the object to get.
+   * @param {Object} [opts={}] - Additional options for the get operation.
+   * @returns {Promise<string|null>} The ETag of the object or null if the object etag does not match.
+   */
+  async getEtag(key: string, opts: Record<string, any> = {}): Promise<string | null> {
+    this._checkKey(key);
+    this._log('info', `Getting etag object ${key}`);
+    const { filteredOpts, conditionalHeaders } = this._filterIfHeaders(opts);
+    const headers = {
+      [HEADER_CONTENT_TYPE]: JSON_CONTENT_TYPE,
+      [HEADER_AMZ_CONTENT_SHA256]: UNSIGNED_PAYLOAD,
+      ...conditionalHeaders,
+    };
+    const encodedKey = uriResourceEscape(key);
+    const { url, headers: signedHeaders } = await this._sign('HEAD', encodedKey, filteredOpts, headers, '');
+
+    const res = await this._sendRequest(url, 'HEAD', signedHeaders);
+    this._log('info', `Response status: ${(res.status, res.statusText)}`);
+    // TODO!!!! check if etag matches
+    if (!res.ok && res.status === 412) {
+      // etag does not match
+      return null;
+    }
+
+    const etag = res.headers.get('etag');
+    if (!etag) {
+      throw new Error('ETag not found in response headers');
+    }
+    return etag;
   }
 
   /**
@@ -636,15 +741,16 @@ class S3 {
     opts: Record<string, any> = {},
   ): Promise<Response> {
     this._checkKey(key);
-    const query = opts;
+    // const query = opts;
+    const { filteredOpts, conditionalHeaders } = this._filterIfHeaders(opts);
     const headers = {
       [HEADER_CONTENT_TYPE]: JSON_CONTENT_TYPE,
       [HEADER_AMZ_CONTENT_SHA256]: UNSIGNED_PAYLOAD,
-      ...(wholeFile ? {} : { range: `bytes=${rangeFrom}-${rangeTo - 1}` }),
+      ...conditionalHeaders,
     };
     const encodedKey = uriResourceEscape(key);
-    const { url, headers: signedHeaders } = await this._sign('GET', encodedKey, query, headers, '');
-    const urlWithQuery = `${url}?${new URLSearchParams(query)}`;
+    const { url, headers: signedHeaders } = await this._sign('GET', encodedKey, filteredOpts, headers, '');
+    const urlWithQuery = `${url}?${new URLSearchParams(filteredOpts)}`;
 
     return this._sendRequest(urlWithQuery, 'GET', signedHeaders);
   }
@@ -761,7 +867,13 @@ class S3 {
     return { partNumber, ETag };
   }
 
-  _validateUploadPartParams(key: string, data: Buffer | string, uploadId: string, partNumber: number, opts: Object) {
+  private _validateUploadPartParams(
+    key: string,
+    data: Buffer | string,
+    uploadId: string,
+    partNumber: number,
+    opts: Object,
+  ) {
     this._checkKey(key);
     if (!(data instanceof Buffer || typeof data === 'string')) {
       this._log('error', ERROR_DATA_BUFFER_REQUIRED);
@@ -904,7 +1016,7 @@ class S3 {
     }
   }
 
-  _buildCompleteMultipartUploadXml(parts: Array<UploadPart>): string {
+  private _buildCompleteMultipartUploadXml(parts: Array<UploadPart>): string {
     return `
       <CompleteMultipartUpload>
         ${parts

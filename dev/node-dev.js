@@ -153,12 +153,60 @@ app.get('/make-folder/:folder', async c => {
   return c.json({ success: true, message: 'Folder created successfully' });
 });
 
+app.get('/etag/:key', async c => {
+  const s3 = new S3(configCFS3);
+  const key = c.req.param('key');
+  console.log('key', key);
+  const etag = await s3.getEtag(key);
+  console.log('etag', etag);
+  return c.json(etag);
+});
+
+app.get('/etag/:key/if-match/:etag', async c => {
+  const s3 = new S3(configCFS3);
+  const key = c.req.param('key');
+  const etag = c.req.param('etag');
+  console.log('key', key);
+  console.log('etag', etag);
+  const etag2 = await s3.getEtag(key, { 'if-match': etag });
+  console.log('etag2', etag2);
+  return c.json(etag2);
+});
+
 app.get('get/:key', async c => {
   const s3 = new S3(configCFS3);
   const key = c.req.param('key');
   console.log('key', key);
   const resp = await s3.get(key);
   console.log('resp', resp);
+  return c.json(resp);
+});
+
+app.get('/get-obj-etag/:key', async c => {
+  const s3 = new S3(configCFS3);
+  const key = c.req.param('key');
+  console.log('key', key);
+  const resp = await s3.getObjectWithETag(key);
+  return c.json(resp);
+});
+
+app.get('/get-obj-etag/:key/if-match/:etag', async c => {
+  const s3 = new S3(configCFS3);
+  const key = c.req.param('key');
+  const etag = c.req.param('etag');
+  console.log('key1 ', key);
+  console.log('etag ', etag);
+  const resp = await s3.get(key, { 'if-match': etag });
+  return c.json(resp);
+});
+
+app.get('get-obj-etag/:key/if-none-match/:etag', async c => {
+  const s3 = new S3(configCFS3);
+  const key = c.req.param('key');
+  const etag = c.req.param('etag');
+  console.log('key', key);
+  console.log('etag', etag);
+  const resp = await s3.get(key, { 'if-none-match': etag });
   return c.json(resp);
 });
 

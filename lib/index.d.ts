@@ -36,7 +36,6 @@ interface CompleteMultipartUploadResult {
     ETag: string;
 }
 type HttpMethod = 'POST' | 'GET' | 'HEAD' | 'PUT' | 'DELETE';
-export declare const ERROR_PREFIX = "ultralight-s3 Module: ";
 /**
  * S3 class for interacting with S3-compatible object storage services.
  * This class provides methods for common S3 operations such as uploading, downloading,
@@ -139,15 +138,13 @@ declare class S3 {
      * @throws {TypeError} If the key is not a non-empty string.
      */
     fileExists(key: string): Promise<boolean>;
-    _sign(method: HttpMethod, keyPath: string, query: Object, headers: Record<string, string | number>, body: string | Buffer): Promise<{
-        url: string;
-        headers: Record<string, any>;
-    }>;
-    _buildCanonicalHeaders(headers: Record<string, string | number>): string;
+    private _sign;
+    private _buildCanonicalHeaders;
     _buildCanonicalRequest(method: HttpMethod, url: URL, query: Object, canonicalHeaders: string, signedHeaders: string, body: string | Buffer): Promise<string>;
     _buildStringToSign(datetime: string, canonicalRequest: string): Promise<string>;
     _calculateSignature(datetime: string, stringToSign: string): Promise<string>;
-    _buildAuthorizationHeader(datetime: string, signedHeaders: string, signature: string): string;
+    private _buildAuthorizationHeader;
+    private _filterIfHeaders;
     /**
      * List objects in the bucket.
      * @param {string} [delimiter='/'] - The delimiter to use for grouping objects in specific path.
@@ -176,6 +173,23 @@ declare class S3 {
      * @returns {Promise<string>} The content of the object.
      */
     get(key: string, opts?: Record<string, any>): Promise<string>;
+    /**
+     *
+     * @param {string} key - The key of the object to get.
+     * @param {Object} [opts={}] - Additional options for the get operation.
+     * @returns {Promise<{ etag: string; data: string }>} The content of the object.
+     */
+    getObjectWithETag(key: string, opts?: Record<string, any>): Promise<{
+        etag: string;
+        data: string;
+    }>;
+    /**
+     * Get the ETag of an object.
+     * @param {string} key - The key of the object to get.
+     * @param {Object} [opts={}] - Additional options for the get operation.
+     * @returns {Promise<string|null>} The ETag of the object or null if the object etag does not match.
+     */
+    getEtag(key: string, opts?: Record<string, any>): Promise<string | null>;
     /**
      * Get a response of an object from the bucket.
      * @param {string} key - The key of the object to get.
@@ -214,7 +228,7 @@ declare class S3 {
      * @throws {TypeError} If any of the parameters are of incorrect type.
      */
     uploadPart(key: string, data: Buffer | string, uploadId: string, partNumber: number, opts?: Object): Promise<UploadPart>;
-    _validateUploadPartParams(key: string, data: Buffer | string, uploadId: string, partNumber: number, opts: Object): void;
+    private _validateUploadPartParams;
     /**
      * Complete a multipart upload.
      * @param {string} key - The key of the object being uploaded.
@@ -233,7 +247,7 @@ declare class S3 {
      * @throws {Error} If the abort operation fails.
      */
     abortMultipartUpload(key: string, uploadId: string): Promise<object>;
-    _buildCompleteMultipartUploadXml(parts: Array<UploadPart>): string;
+    private _buildCompleteMultipartUploadXml;
     /**
      * Delete an object from the bucket.
      * @param {string} key - The key of the object to delete.
