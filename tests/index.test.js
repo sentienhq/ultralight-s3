@@ -67,6 +67,82 @@ describe('S3 class', () => {
     expect(minioList.some(item => item.name === testKey)).toBe(true);
   });
 
+  test('should return ETag when putting an object', async () => {
+    const key = 'etag-test-object';
+    const content = 'Hello, ETag!';
+    const response = await s3.put(key, content);
+    const etag = s3.sanitizeETag(response.headers.get('etag') || '');
+    expect(etag).toBeDefined();
+    expect(typeof etag).toBe('string');
+
+    const getResult = await s3.getObjectWithETag(key);
+    expect(getResult.etag).toBe(etag);
+
+    const etagFromDirectGet = await s3.getEtag(key);
+    expect(etagFromDirectGet).toBe(etag);
+  });
+
+  test('should succeed with correct If-Match header', async () => {
+    const key = 'if-match-test-object';
+    const content = 'Hello, If-Match!';
+    const putResult = await s3.put(key, content);
+    const etag = putResult.headers.get('etag');
+    const getResult = await s3.get(key, { 'if-match': etag });
+    expect(getResult).toBe(content);
+  });
+
+  test('should fail with incorrect If-Match header', async () => {
+    const key = 'if-match-fail-test-object';
+    const content = 'Hello, If-Match Fail!';
+    await s3.put(key, content);
+    const getResult = await s3.get(key, { 'if-match': '"incorrect-etag"' });
+    await expect(getResult).toBe(null);
+  });
+
+  test('should succeed with correct If-None-Match header', async () => {
+    const key = 'if-none-match-test-object';
+    const content = 'Hello, If-None-Match!';
+    await s3.put(key, content);
+    const getResult = await s3.get(key, { 'if-none-match': '"incorrect-etag"' });
+    expect(getResult).toBe(content);
+  });
+
+  test('should return null with matching If-None-Match header', async () => {
+    const key = 'if-none-match-null-test-object';
+    const content = 'Hello, If-None-Match Null!';
+    const putResult = await s3.put(key, content);
+    const etag = putResult.headers.get('etag');
+    const getResult = await s3.get(key, { 'if-none-match': etag });
+    expect(getResult).toBe(null);
+  });
+
+  test('should handle ETag for multipart uploads', async () => {
+    const key = 'multipart-etag-test';
+    const partSize = 5 * 1024 * 1024; // 5MB
+    const buffer = randomBytes(partSize * 2 + 1024); // Just over 2 parts
+
+    const uploadId = await s3.getMultipartUploadId(key);
+    const [upload1, upload2] = await Promise.all([
+      s3.uploadPart(key, buffer.subarray(0, partSize), uploadId, 1),
+      s3.uploadPart(key, buffer.subarray(partSize), uploadId, 2),
+    ]);
+
+    const result = await s3.completeMultipartUpload(key, uploadId, [
+      { partNumber: 1, ETag: upload1.ETag },
+      { partNumber: 2, ETag: upload2.ETag },
+    ]);
+    // const etag = result.headers.get('etag');
+    expect(result).toBeDefined();
+    expect(typeof result).toBe('object');
+
+    const etag = result.eTag;
+    expect(etag).toBeDefined();
+    expect(typeof etag).toBe('string');
+
+    const getResult = await s3.getObjectWithETag(key);
+    expect(getResult.etag).toBe(etag);
+  });
+
   test('should be able to list objects with prefix', async () => {
     const testKey = 'list-test-object';
     const testContent = 'List test content';

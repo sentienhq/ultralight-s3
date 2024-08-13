@@ -109,6 +109,7 @@ declare class S3 {
     setEndpoint: (endpoint: string) => void;
     getMaxRequestSizeInBytes: () => number;
     setMaxRequestSizeInBytes: (maxRequestSizeInBytes: number) => void;
+    sanitizeETag: (etag: string) => string;
     getProps: () => {
         accessKeyId: string;
         secretAccessKey: string;
@@ -261,5 +262,6 @@ declare class S3 {
     _buildCanonicalQueryString(queryParams: Object): string;
     _getSignatureKey(dateStamp: string): Promise<string>;
 }
+export declare const sanitizeETag: (etag: string) => string;
 export { S3 };
 export default S3;

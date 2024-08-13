@@ -331,6 +331,7 @@ class S3 {
   setMaxRequestSizeInBytes = (maxRequestSizeInBytes: number) => {
     this.maxRequestSizeInBytes = maxRequestSizeInBytes;
   };
+  sanitizeETag = (etag: string): string => sanitizeETag(etag);
 
   getProps = () => ({
     accessKeyId: this.accessKeyId,
@@ -424,11 +425,11 @@ class S3 {
     const encodedKey = uriResourceEscape(key);
     const { url, headers: signedHeaders } = await this._sign('HEAD', encodedKey, filteredOpts, headers, '');
     try {
-      const res = await this._sendRequest(url, 'HEAD', signedHeaders, '', [200, 404, 412]);
+      const res = await this._sendRequest(url, 'HEAD', signedHeaders, '', [200, 404, 412, 304]);
       if (res.status === 404) {
         return false;
       }
-      if (res.status === 412) {
+      if (res.status === 412 || res.status === 304) {
         return null;
       }
       if (res.ok && res.status === 200) return true;
@@ -661,8 +662,8 @@ class S3 {
     };
     const encodedKey = uriResourceEscape(key);
     const { url, headers: signedHeaders } = await this._sign('GET', encodedKey, filteredOpts, headers, '');
-    const res = await this._sendRequest(url, 'GET', signedHeaders, '', [200, 404, 412]);
-    if (res.status === 404 || res.status === 412) {
+    const res = await this._sendRequest(url, 'GET', signedHeaders, '', [200, 404, 412, 304]);
+    if (res.status === 404 || res.status === 412 || res.status === 304) {
       this._log('error', `Failed to get object. Status: ${res.status}`);
       return null;
     }
@@ -694,8 +695,8 @@ class S3 {
     const encodedKey = uriResourceEscape(key);
     const { url, headers: signedHeaders } = await this._sign('GET', encodedKey, filteredOpts, headers, '');
     try {
-      const res = await this._sendRequest(url, 'GET', signedHeaders, '', [200, 404, 412]);
-      if (res.status === 404 || res.status === 412) {
+      const res = await this._sendRequest(url, 'GET', signedHeaders, '', [200, 404, 412, 304]);
+      if (res.status === 404 || res.status === 412 || res.status === 304) {
         this._log('error', `Failed to get object. Status: ${res.status}`);
         return { etag: null, data: null };
       }
@@ -709,7 +710,7 @@ class S3 {
         throw new Error('ETag not found in response headers');
       }
       const data = await res.text();
-      return { etag, data };
+      return { etag: sanitizeETag(etag), data };
     } catch (error) {
       this._log('error', `Error getting object ${key} with ETag: ${error}`);
       throw error;
@@ -734,10 +735,10 @@ class S3 {
     const encodedKey = uriResourceEscape(key);
     const { url, headers: signedHeaders } = await this._sign('HEAD', encodedKey, filteredOpts, headers, '');
 
-    const res = await this._sendRequest(url, 'HEAD', signedHeaders, '', [200, 412]);
+    const res = await this._sendRequest(url, 'HEAD', signedHeaders, '', [200, 412, 304]);
     this._log('info', `Response status: ${(res.status, res.statusText)}`);
     // etag does not match
-    if (res.status === 412) {
+    if (res.status === 412 || res.status === 304) {
       return null;
     }
 
@@ -746,7 +747,7 @@ class S3 {
       this._log('error', `ETag not found in response headers`);
       throw new Error(`ETag not found in response headers`);
     }
-    return etag;
+    return sanitizeETag(etag);
   }
 
   /**
@@ -766,16 +767,16 @@ class S3 {
     opts: Record<string, any> = {},
   ): Promise<Response> {
     this._checkKey(key);
-    const query = { wholeFile: String(wholeFile), rangeFrom: String(rangeFrom), rangeTo: String(rangeTo) };
-    const { filteredOpts, conditionalHeaders } = this._filterIfHeaders({ ...opts, ...query });
+    const { filteredOpts, conditionalHeaders } = this._filterIfHeaders({ ...opts });
     const headers = {
       [HEADER_CONTENT_TYPE]: JSON_CONTENT_TYPE,
       [HEADER_AMZ_CONTENT_SHA256]: UNSIGNED_PAYLOAD,
+      ...(wholeFile ? {} : { range: `bytes=${rangeFrom}-${rangeTo - 1}` }),
       ...conditionalHeaders,
     };
     const encodedKey = uriResourceEscape(key);
     const { url, headers: signedHeaders } = await this._sign('GET', encodedKey, filteredOpts, headers, '');
-    const urlWithQuery = `${url}?${new URLSearchParams(query)}`;
+    const urlWithQuery = `${url}?${new URLSearchParams(filteredOpts)}`;
 
     return this._sendRequest(urlWithQuery, 'GET', signedHeaders);
   }
@@ -888,7 +889,7 @@ class S3 {
     const urlWithQuery = `${url}?${new URLSearchParams(query)}`;
 
     const res = await this._sendRequest(urlWithQuery, 'PUT', signedHeaders, data);
-    const ETag = res.headers.get('etag') || '';
+    const ETag = sanitizeETag(res.headers.get('etag') || '');
     return { partNumber, ETag };
   }
 
@@ -1143,6 +1144,16 @@ const _hmac = async (key: string | Buffer, content: string, encoding?: 'hex'): P
   hmacSum.update(content);
   return hmacSum.digest(encoding);
 };
+export const sanitizeETag = (etag: string): string => {
+  const replaceChars: Record<string, string> = {
+    '"': '',
+    '&quot;': '',
+    '&#34;': '',
+    '&QUOT;': '',
+    '&#x00022': '',
+  };
+  return etag.replace(/^("|&quot;|&#34;)|("|&quot;|&#34;)$/g, m => replaceChars[m] as string);
+};
 
 const _parseXml = (str: string): string | object | any => {
   const unescapeXml = (value: string): string => {
@@ -1164,7 +1175,7 @@ const _parseXml = (str: string): string | object | any => {
     const parsedValue = value != null ? _parseXml(value) : true;
 
     if (typeof parsedValue === 'string') {
-      (json as { [key: string]: any })[fullKey] = unescapeXml(parsedValue);
+      (json as { [key: string]: any })[fullKey] = sanitizeETag(unescapeXml(parsedValue));
     } else if (Array.isArray((json as { [key: string]: any })[fullKey])) {
       (json as { [key: string]: any })[fullKey].push(parsedValue);
     } else {
