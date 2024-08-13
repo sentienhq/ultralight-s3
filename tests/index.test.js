@@ -327,8 +327,8 @@ describe('S3 class', () => {
   test('should handle non-existent objects correctly', async () => {
     const nonExistentKey = 'non-existent-object';
 
-    await expect(s3.get(nonExistentKey)).rejects.toThrow();
-    await expect(s3.getContentLength(nonExistentKey)).rejects.toThrow();
+    const nonExistentObject = await s3.get(nonExistentKey);
+    await expect(nonExistentObject).toBe(null);
 
     const exists = await s3.fileExists(nonExistentKey);
     expect(exists).toBe(false);

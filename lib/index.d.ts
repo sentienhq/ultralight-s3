@@ -36,6 +36,7 @@ interface CompleteMultipartUploadResult {
     ETag: string;
 }
 type HttpMethod = 'POST' | 'GET' | 'HEAD' | 'PUT' | 'DELETE';
+type ExistResponseCode = false | true | null;
 /**
  * S3 class for interacting with S3-compatible object storage services.
  * This class provides methods for common S3 operations such as uploading, downloading,
@@ -134,10 +135,11 @@ declare class S3 {
     /**
      * Check if a file exists in the bucket.
      * @param {string} key - The key of the object.
-     * @returns {Promise<boolean>} True if the file exists, false otherwise.
+     * @param {Object} [opts={}] - Additional options for the fileExists operation.
+     * @returns {Promise<ExistResponseCode>} True if the file exists, false otherwise. 0 - Not found (404), 1 - Found (200), 2 - ETag mismatch (412).
      * @throws {TypeError} If the key is not a non-empty string.
      */
-    fileExists(key: string): Promise<boolean>;
+    fileExists(key: string, opts?: Record<string, any>): Promise<ExistResponseCode>;
     private _sign;
     private _buildCanonicalHeaders;
     _buildCanonicalRequest(method: HttpMethod, url: URL, query: Object, canonicalHeaders: string, signedHeaders: string, body: string | Buffer): Promise<string>;
@@ -170,18 +172,18 @@ declare class S3 {
      * Get an object from the bucket.
      * @param {string} key - The key of the object to get.
      * @param {Object} [opts={}] - Additional options for the get operation.
-     * @returns {Promise<string>} The content of the object.
+     * @returns {Promise<string|null>} The content of the object. If the object does not exist, null will be returned.
      */
-    get(key: string, opts?: Record<string, any>): Promise<string>;
+    get(key: string, opts?: Record<string, any>): Promise<string | null>;
     /**
      *
      * @param {string} key - The key of the object to get.
      * @param {Object} [opts={}] - Additional options for the get operation.
-     * @returns {Promise<{ etag: string; data: string }>} The content of the object.
+     * @returns {Promise<{ etag: string|null; data: string|null }>} The content of the object. If the object does not exist, etag and data will be null.
      */
     getObjectWithETag(key: string, opts?: Record<string, any>): Promise<{
-        etag: string;
-        data: string;
+        etag: string | null;
+        data: string | null;
     }>;
     /**
      * Get the ETag of an object.
@@ -254,7 +256,7 @@ declare class S3 {
      * @returns {Promise<boolean>} The response from the delete operation. True if the delete operation was successful, false otherwise. Note: The delete operation may return a 204 status code even if the object was not found.
      */
     delete(key: string): Promise<boolean>;
-    _sendRequest(url: string, method: HttpMethod, headers: Record<string, string | any>, body?: string | Buffer): Promise<Response>;
+    _sendRequest(url: string, method: HttpMethod, headers: Record<string, string | any>, body?: string | Buffer, toleratedStatusCodes?: number[]): Promise<Response>;
     _handleErrorResponse(res: Response): Promise<void>;
     _buildCanonicalQueryString(queryParams: Object): string;
     _getSignatureKey(dateStamp: string): Promise<string>;

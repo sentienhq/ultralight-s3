@@ -39,23 +39,23 @@ const ERROR_PREFIX_TYPE = `${ERROR_PREFIX}prefix must be a string`;
 const ERROR_MAX_KEYS_TYPE = `${ERROR_PREFIX}maxKeys must be a positive integer`;
 const ERROR_DELIMITER_REQUIRED = `${ERROR_PREFIX}delimiter must be a string`;
 
-const STATUS_CODES: Record<string, string> = {
-  '200': 'OK',
-  '204': 'No Content',
-  '205': 'Reset Content',
-  '206': 'Partial Content',
-  '301': 'Moved Permanently',
-  '302': 'Found',
-  '400': 'Bad Request',
-  '401': 'Unauthorized',
-  '403': 'Forbidden',
-  '404': 'Not Found',
-  '418': "I'm a Teapot",
-  '428': 'Precondition Required',
-  '429': 'Too Many Requests',
-  '500': 'Internal Server Error',
-  '501': 'Not Implemented',
-};
+// const STATUS_CODES: Record<number, string> = {
+//   200: 'OK',
+//   204: 'No Content',
+//   205: 'Reset Content',
+//   206: 'Partial Content',
+//   301: 'Moved Permanently',
+//   302: 'Found',
+//   400: 'Bad Request',
+//   401: 'Unauthorized',
+//   403: 'Forbidden',
+//   404: 'Not Found',
+//   418: "I'm a Teapot",
+//   428: 'Precondition Required',
+//   429: 'Too Many Requests',
+//   500: 'Internal Server Error',
+//   501: 'Not Implemented',
+// };
 
 interface S3Config {
   accessKeyId: string;
@@ -103,6 +103,11 @@ interface CompleteMultipartUploadResult {
 }
 
 type HttpMethod = 'POST' | 'GET' | 'HEAD' | 'PUT' | 'DELETE';
+
+// false - Not found (404)
+// true - Found (200)
+// null - ETag mismatch (412)
+type ExistResponseCode = false | true | null;
 
 let _createHmac = crypto.createHmac || (await import('node:crypto')).createHmac;
 let _createHash = crypto.createHash || (await import('node:crypto')).createHash;
@@ -408,23 +413,27 @@ class S3 {
   /**
    * Check if a file exists in the bucket.
    * @param {string} key - The key of the object.
-   * @returns {Promise<boolean>} True if the file exists, false otherwise.
+   * @param {Object} [opts={}] - Additional options for the fileExists operation.
+   * @returns {Promise<ExistResponseCode>} True if the file exists, false otherwise. 0 - Not found (404), 1 - Found (200), 2 - ETag mismatch (412).
    * @throws {TypeError} If the key is not a non-empty string.
    */
-  async fileExists(key: string): Promise<boolean> {
+  async fileExists(key: string, opts: Record<string, any> = {}): Promise<ExistResponseCode> {
     this._checkKey(key);
-    const headers = { [HEADER_AMZ_CONTENT_SHA256]: UNSIGNED_PAYLOAD };
+    const { filteredOpts, conditionalHeaders } = this._filterIfHeaders(opts);
+    const headers = { [HEADER_AMZ_CONTENT_SHA256]: UNSIGNED_PAYLOAD, ...conditionalHeaders };
     const encodedKey = uriResourceEscape(key);
-    const { url, headers: signedHeaders } = await this._sign('HEAD', encodedKey, {}, headers, '');
+    const { url, headers: signedHeaders } = await this._sign('HEAD', encodedKey, filteredOpts, headers, '');
     try {
-      const res = await fetch(url, {
-        method: 'HEAD',
-        headers: signedHeaders,
-      });
+      const res = await this._sendRequest(url, 'HEAD', signedHeaders, '', [200, 404, 412]);
+      if (res.status === 404) {
+        return false;
+      }
+      if (res.status === 412) {
+        return null;
+      }
       if (res.ok && res.status === 200) return true;
-      else if (res.status === 404) return false;
       else this._handleErrorResponse(res);
-      return false;
+      return false; // should never happen
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       this._log('error', `${ERROR_PREFIX}Failed to check if file exists: ${errorMessage}`);
@@ -639,9 +648,9 @@ class S3 {
    * Get an object from the bucket.
    * @param {string} key - The key of the object to get.
    * @param {Object} [opts={}] - Additional options for the get operation.
-   * @returns {Promise<string>} The content of the object.
+   * @returns {Promise<string|null>} The content of the object. If the object does not exist, null will be returned.
    */
-  async get(key: string, opts: Record<string, any> = {}): Promise<string> {
+  async get(key: string, opts: Record<string, any> = {}): Promise<string | null> {
     this._checkKey(key);
     this._log('info', `Getting object ${key}`);
     const { filteredOpts, conditionalHeaders } = this._filterIfHeaders(opts);
@@ -652,7 +661,15 @@ class S3 {
     };
     const encodedKey = uriResourceEscape(key);
     const { url, headers: signedHeaders } = await this._sign('GET', encodedKey, filteredOpts, headers, '');
-    const res = await this._sendRequest(url, 'GET', signedHeaders);
+    const res = await this._sendRequest(url, 'GET', signedHeaders, '', [200, 404, 412]);
+    if (res.status === 404 || res.status === 412) {
+      this._log('error', `Failed to get object. Status: ${res.status}`);
+      return null;
+    }
+    if (!res.ok) {
+      this._log('error', `Failed to get object. Status: ${res.status}`);
+      throw new Error(`Failed to get object. Status: ${res.status}`);
+    }
     return res.text();
   }
 
@@ -660,9 +677,12 @@ class S3 {
    *
    * @param {string} key - The key of the object to get.
    * @param {Object} [opts={}] - Additional options for the get operation.
-   * @returns {Promise<{ etag: string; data: string }>} The content of the object.
+   * @returns {Promise<{ etag: string|null; data: string|null }>} The content of the object. If the object does not exist, etag and data will be null.
    */
-  async getObjectWithETag(key: string, opts: Record<string, any> = {}): Promise<{ etag: string; data: string }> {
+  async getObjectWithETag(
+    key: string,
+    opts: Record<string, any> = {},
+  ): Promise<{ etag: string | null; data: string | null }> {
     this._checkKey(key);
     this._log('info', `Getting object ${key}`);
     const { filteredOpts, conditionalHeaders } = this._filterIfHeaders(opts);
@@ -674,8 +694,13 @@ class S3 {
     const encodedKey = uriResourceEscape(key);
     const { url, headers: signedHeaders } = await this._sign('GET', encodedKey, filteredOpts, headers, '');
     try {
-      const res = await this._sendRequest(url, 'GET', signedHeaders);
+      const res = await this._sendRequest(url, 'GET', signedHeaders, '', [200, 404, 412]);
+      if (res.status === 404 || res.status === 412) {
+        this._log('error', `Failed to get object. Status: ${res.status}`);
+        return { etag: null, data: null };
+      }
       if (!res.ok) {
+        this._log('error', `Failed to get object. Status: ${res.status}`);
         throw new Error(`Failed to get object. Status: ${res.status}`);
       }
 
@@ -709,17 +734,17 @@ class S3 {
     const encodedKey = uriResourceEscape(key);
     const { url, headers: signedHeaders } = await this._sign('HEAD', encodedKey, filteredOpts, headers, '');
 
-    const res = await this._sendRequest(url, 'HEAD', signedHeaders);
+    const res = await this._sendRequest(url, 'HEAD', signedHeaders, '', [200, 412]);
     this._log('info', `Response status: ${(res.status, res.statusText)}`);
-    // TODO!!!! check if etag matches
-    if (!res.ok && res.status === 412) {
-      // etag does not match
+    // etag does not match
+    if (res.status === 412) {
       return null;
     }
 
     const etag = res.headers.get('etag');
     if (!etag) {
-      throw new Error('ETag not found in response headers');
+      this._log('error', `ETag not found in response headers`);
+      throw new Error(`ETag not found in response headers`);
     }
     return etag;
   }
@@ -741,8 +766,8 @@ class S3 {
     opts: Record<string, any> = {},
   ): Promise<Response> {
     this._checkKey(key);
-    // const query = opts;
-    const { filteredOpts, conditionalHeaders } = this._filterIfHeaders(opts);
+    const query = { wholeFile: String(wholeFile), rangeFrom: String(rangeFrom), rangeTo: String(rangeTo) };
+    const { filteredOpts, conditionalHeaders } = this._filterIfHeaders({ ...opts, ...query });
     const headers = {
       [HEADER_CONTENT_TYPE]: JSON_CONTENT_TYPE,
       [HEADER_AMZ_CONTENT_SHA256]: UNSIGNED_PAYLOAD,
@@ -750,7 +775,7 @@ class S3 {
     };
     const encodedKey = uriResourceEscape(key);
     const { url, headers: signedHeaders } = await this._sign('GET', encodedKey, filteredOpts, headers, '');
-    const urlWithQuery = `${url}?${new URLSearchParams(filteredOpts)}`;
+    const urlWithQuery = `${url}?${new URLSearchParams(query)}`;
 
     return this._sendRequest(urlWithQuery, 'GET', signedHeaders);
   }
@@ -1059,16 +1084,17 @@ class S3 {
     method: HttpMethod,
     headers: Record<string, string | any>,
     body?: string | Buffer,
+    toleratedStatusCodes: number[] = [],
   ): Promise<Response> {
     this._log('info', `Sending ${method} request to ${url}, headers: ${JSON.stringify(headers)}`);
     const res = await fetch(url, {
       method,
       headers,
-      body,
+      body: ['GET', 'HEAD'].includes(method) ? undefined : body,
       signal: this.requestAbortTimeout !== undefined ? AbortSignal.timeout(this.requestAbortTimeout) : undefined,
     });
 
-    if (!res.ok) {
+    if (!res.ok && !toleratedStatusCodes.includes(res.status)) {
       await this._handleErrorResponse(res);
     }
 

@@ -168,7 +168,7 @@ app.get('/etag/:key/if-match/:etag', async c => {
   const etag = c.req.param('etag');
   console.log('key', key);
   console.log('etag', etag);
-  const etag2 = await s3.getEtag(key, { 'if-match': etag });
+  const etag2 = await s3.get(key, { 'if-match': etag });
   console.log('etag2', etag2);
   return c.json(etag2);
 });
