@@ -1,6 +1,7 @@
 {
   "displayName": "ultralight-s3 node tests",
   "testTimeout": 60000,
+  "silent": false,
   "verbose": true,
   "testEnvironment": "node",
   "setupFilesAfterEnv": ["<rootDir>/tests/setup.js"],
