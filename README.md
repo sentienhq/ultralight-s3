@@ -8,7 +8,7 @@
 
 ## Features
 
-- 🚀 Lightweight: Only ~15KB minified
+- 🚀 Lightweight: Only ~16KB minified
 - 🔧 Zero dependencies
 - 💻 Works on NodeJS, Cloudflare workers, ideal for edge computing (browser support - not implemented yet)
 - 🔑 Supports essential S3 APIs (list, put, get, delete and a few more)
@@ -28,11 +28,12 @@
   - [Azure](#others)
   - [Ceph](#others)
   - [Others](#others)
+- [Public functions](#public-functions)
 - [API](#api)
 - [Community](#community)
 - [License](#license)
 
-## Usage
+## Simple usage
 
 ```typescript
 import { S3 } from 'ultralight-s3';
@@ -158,6 +159,49 @@ const s3 = new S3({
 
 Not tested, but should work with other S3 compatible services. Full list - soon to come. PRs are welcome.
 
+## Public functions
+
+### Bucket Operations
+
+- [`bucketExists()`](#bucketexists): Check if a bucket exists.
+
+### Object Operations
+
+- [`get(key, opts)`](#get): Get an object from the bucket
+- [`getObjectWithETag(key, opts)`](#getobjectwithetag): Get an object and its ETag from the bucket
+- [`getEtag(key, opts)`](#getetag): Get the ETag of an object
+- [`getResponse(key, wholeFile, rangeFrom, rangeTo, opts)`](#getresponse): Get a response of an object from the bucket
+- [`put(key, data)`](#put): Put an object into the bucket
+- [`delete(key)`](#delete): Delete an object from the bucket
+- [`getContentLength(key)`](#getcontentlength): Get the content length of an object
+- [`fileExists(key)`](#fileexists): Check if an object exists in the bucket
+
+### Listing Operations
+
+- [`list(delimiter, prefix, maxKeys, method, opts)`](#list): List objects in the bucket
+- [`listMultiPartUploads(delimiter, prefix, method, opts)`](#listmultipartuploads): List multipart uploads in the bucket
+
+### Multipart Upload Operations
+
+- [`getMultipartUploadId(key, fileType)`](#getmultipartuploadid): Initiate a multipart upload
+- [`uploadPart(key, data, uploadId, partNumber, opts)`](#uploadpart): Upload a part in a multipart upload
+- [`completeMultipartUpload(key, uploadId, parts)`](#completemultipartupload): Complete a multipart upload
+- [`abortMultipartUpload(key, uploadId)`](#abortmultipartupload): Abort a multipart upload
+
+### Configuration and Utility Methods
+
+- `getBucketName()`: Get the current bucket name
+- `setBucketName(bucketName)`: Set the bucket name
+- `getRegion()`: Get the current region
+- `setRegion(region)`: Set the region
+- `getEndpoint()`: Get the current endpoint
+- `setEndpoint(endpoint)`: Set the endpoint
+- `getMaxRequestSizeInBytes()`: Get the maximum request size in bytes
+- `setMaxRequestSizeInBytes(maxRequestSizeInBytes)`: Set the maximum request size in bytes
+- `sanitizeETag(etag)`: Sanitize an ETag string
+- `getProps()`: Get all configuration properties
+- `setProps(props)`: Set all configuration properties
+
 ## API
 
 **new S3(config: Object)**
@@ -174,7 +218,8 @@ Not tested, but should work with other S3 compatible services. Full list - soon 
 - **Behavior**: Creates a new instance of the S3 class with the provided configuration.
 - **Returns**: S3: An instance of the S3 class.
 
-**list(delimiter?: string, prefix?: string, maxKeys?: number, method?: string, opts?: Object): Promise<Array<Object\>>**
+<a id="list"></a>
+**list(delimiter?: string, prefix?: string, maxKeys?: number, method?: string, opts?: Object): Promise<Array<Object\>**
 
 - **Input**:
   - `delimiter?: string` (optional): The delimiter to use for grouping objects in specific path (default: '/').
@@ -183,8 +228,9 @@ Not tested, but should work with other S3 compatible services. Full list - soon 
   - `method?: string` (optional): The HTTP method to use (default: 'GET').
   - `opts?: Object` (optional): Additional options for the list operation.
 - **Behavior**: Lists objects in the bucket, supporting pagination and filtering.
-- **Returns**: Promise<Array<Object\>\>: A promise that resolves to an array of objects or object metadata.
+- **Returns**: Promise<Array<Object\>: A promise that resolves to an array of objects or object metadata.
 
+<a id="put"></a>
 **put(key: string, data: Buffer | string): Promise<Object\>**
 
 - **Input**:
@@ -193,14 +239,25 @@ Not tested, but should work with other S3 compatible services. Full list - soon 
 - **Behavior**: Uploads an object to the bucket.
 - **Returns**: Promise<Object\>: A promise that resolves to the response from the put operation.
 
+<a id="get"></a>
 **get(key: string, opts?: Object): Promise<string>**
 
 - **Input**:
   - `key: string`: The key of the object to get.
   - `opts?: Object` (optional): Additional options for the get operation.
 - **Behavior**: Retrieves an object from the bucket.
-- **Returns**: Promise<string\>: A promise that resolves to the content of the object.
+- **Returns**: Promise<string | null>: A promise that resolves to the content of the object or null if the object doesn't exist or there's an ETag mismatch.
 
+<a id="getobjectwithetag"></a>
+**getObjectWithETag(key: string, opts?: Object): Promise<{ etag: string | null; data: string | null }>**
+
+- **Input**:
+  - `key: string`: The key of the object to get.
+  - `opts?: Object` (optional): Additional options for the get operation.
+- **Behavior**: Retrieves an object and its ETag from the bucket.
+- **Returns**: Promise<{ etag: string | null; data: string | null }>: A promise that resolves to an object containing the ETag and content of the object, or null values if the object doesn't exist or there's an ETag mismatch.
+
+<a id="getresponse"></a>
 **getResponse(key: string, wholeFile?: boolean, rangeFrom?: number, rangeTo?: number, opts?: Object): Promise<Response\>**
 
 - **Input**:
@@ -212,25 +269,38 @@ Not tested, but should work with other S3 compatible services. Full list - soon 
 - **Behavior**: Retrieves a response of an object from the bucket.
 - **Returns**: Promise<Response\>: A promise that resolves to a Response of the object content. Use readableStream() to get the stream from .body.
 
+<a id="getetag"></a>
+**getEtag(key: string, opts?: Object): Promise<string | null>**
+
+- **Input**:
+  - `key: string`: The key of the object to get the ETag for.
+  - `opts?: Object` (optional): Additional options for the operation.
+- **Behavior**: Retrieves the ETag of an object from the bucket.
+- **Returns**: Promise<string | null>: A promise that resolves to the ETag of the object or null if the ETag doesn't match the provided conditions.
+
+<a id="delete"></a>
 **delete(key: string): Promise<boolean>**
 
 - **Input**: `key: string`: The key of the object to delete.
 - **Behavior**: Deletes an object from the bucket.
 - **Returns**: Promise<bollean\>: A promise that resolves to true if the delete operation was successful, false otherwise. ⚠️ Note: Delete will NOT return false if the object does not exist. Use fileExists() to check if an object exists before/after deleting it.
 
-**fileExists(key: string): Promise<boolean>**
+<a id="fileexists"></a>
+**fileExists(key: string): Promise<ExistResponseCode>**
 
 - **Input**: `key: string`: The key of the object to check.
 - **Behavior**: Checks if an object exists in the bucket.
-- **Returns**: Promise<boolean\>: A promise that resolves to a boolean indicating whether the object exists.
+- **Returns**: Promise<ExistResponseCode>: A promise that resolves to a value indicating the existence status: false (not found), true (found), or null (ETag mismatch).
 
-**getContentLength(key: string): Promise<number>**
+<a id="getcontentlength"></a>
+**getContentLength(key: string): Promise<number\>**
 
 - **Input**: `key: string`: The key of the object.
 - **Behavior**: Gets the content length of an object.
 - **Returns**: Promise<number\>: A promise that resolves to the content length of the object in bytes.
 
-**listMultiPartUploads(delimiter?: string, prefix?: string, method?: string, opts?: Object): Promise<Array<Object\>>**
+<a id="listmultipartuploads"></a>
+**listMultiPartUploads(delimiter?: string, prefix?: string, method?: string, opts?: Object): Promise<Array<Object\>**
 
 - **Input**:
   - `delimiter?: string` (optional): The delimiter to use for grouping objects in specific path (default: '/').
@@ -238,8 +308,9 @@ Not tested, but should work with other S3 compatible services. Full list - soon 
   - `method?: string` (optional): The HTTP method to use (default: 'GET').
   - `opts?: Object` (optional): Additional options for the list operation.
 - **Behavior**: Lists multipart uploads in the bucket.
-- **Returns**: Promise<Array<Object\>\>: A promise that resolves to an array of multipart uploads or multipart upload metadata.
+- **Returns**: Promise<Array<Object\>: A promise that resolves to an array of multipart uploads or multipart upload metadata.
 
+<a id="getmultipartuploadid"></a>
 **getMultipartUploadId(key: string, fileType?: string): Promise<string>**
 
 - **Input**:
@@ -248,6 +319,7 @@ Not tested, but should work with other S3 compatible services. Full list - soon 
 - **Behavior**: Initiates a multipart upload.
 - **Returns**: Promise<string\>: A promise that resolves to the upload ID for the multipart upload.
 
+<a id="uploadpart"></a>
 **uploadPart(key: string, data: Buffer | string, uploadId: string, partNumber: number, opts?: Object): Promise<{ partNumber: number, ETag: string }>**
 
 - **Input**:
@@ -259,6 +331,7 @@ Not tested, but should work with other S3 compatible services. Full list - soon 
 - **Behavior**: Uploads a part in a multipart upload.
 - **Returns**: Promise<{ partNumber: number, ETag: string }>: A promise that resolves to an object containing the ETag and part number of the uploaded part.
 
+<a id="completemultipartupload"></a>
 **completeMultipartUpload(key: string, uploadId: string, parts: Array<{ partNumber: number, ETag: string }>): Promise<Object\>**
 
 - **Input**:
@@ -268,6 +341,7 @@ Not tested, but should work with other S3 compatible services. Full list - soon 
 - **Behavior**: Completes a multipart upload.
 - **Returns**: Promise<Object\>: A promise that resolves to the result of the complete multipart upload operation.
 
+<a id="abortmultipartupload"></a>
 **abortMultipartUpload(key: string, uploadId: string): Promise<Object\>**
 
 - **Input**:
@@ -276,10 +350,18 @@ Not tested, but should work with other S3 compatible services. Full list - soon 
 - **Behavior**: Aborts a multipart upload.
 - **Returns**: Promise<Object\>: A promise that resolves to the abort response.
 
-**bucketExists(): Promise<boolean>**
+<a id="bucketexists"></a>
+**bucketExists(): Promise<boolean\>**
 
 - **Behavior**: Checks if the configured bucket exists.
 - **Returns**: Promise<boolean>: A promise that resolves to a boolean indicating whether the bucket exists.
+
+<a id="sanitizeetag"></a>
+**sanitizeETag(etag: string): string**
+
+- **Input**: `etag: string`: The ETag to sanitize.
+- **Behavior**: Removes surrounding quotes and HTML entities from the ETag.
+- **Returns**: string: The sanitized ETag.
 
 Also all essential getters and setters for the config object.
 
