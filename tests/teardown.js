@@ -7,7 +7,7 @@ const composeFile = join(CWD, 'tests', 'compose.yaml');
 
 const downAll = () => {
   return new Promise((resolve, reject) => {
-    const dockerCompose = spawn('docker-compose', ['-f', composeFile, 'down'], { cwd: CWD });
+    const dockerCompose = spawn('docker', ['compose', '-f', composeFile, 'down'], { cwd: CWD });
 
     dockerCompose.stdout.on('data', data => {
       console.log(`stdout: ${data}`);
