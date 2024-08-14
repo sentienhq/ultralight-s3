@@ -5,6 +5,12 @@
 [![npm package version](https://img.shields.io/npm/v/ultralight-s3)](https://www.npmjs.com/package/ultralight-s3)
 ![npm package minimized gzipped size](https://img.shields.io/bundlejs/size/ultralight-s3)[![NPM License](https://img.shields.io/npm/l/ultralight-s3)](https://github.com/sentienhq/ultralight-s3/blob/main/LICENSE.md)
 [![GitHub Issues or Pull Requests](https://img.shields.io/github/issues/sentienhq/ultralight-s3)](https://github.com/sentienhq/ultralight-s3/issues)
+[![GitHub Repo stars](https://img.shields.io/github/stars/sentienhq/ultralight-s3?style=social)](https://github.com/sentienhq/ultralight-s3)
+[![Contributions welcome](https://img.shields.io/badge/contributions-welcome-brightgreen.svg?style=flat)](https://github.com/sentienhq/ultralight-s3/issues)
+
+Dev branch:
+[![Test Runner](https://github.com/sentienhq/ultralight-s3/actions/workflows/test-runner.yml/badge.svg)](https://github.com/sentienhq/ultralight-s3/actions/workflows/test-runner.yml)
+[![CodeQL](https://github.com/sentienhq/ultralight-s3/actions/workflows/github-code-scanning/codeql/badge.svg?branch=dev)](https://github.com/sentienhq/ultralight-s3/actions/workflows/github-code-scanning/codeql)
 
 ## Features
 
