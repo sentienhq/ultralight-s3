@@ -6,11 +6,15 @@
 ![npm package minimized gzipped size](https://img.shields.io/bundlejs/size/ultralight-s3)[![NPM License](https://img.shields.io/npm/l/ultralight-s3)](https://github.com/sentienhq/ultralight-s3/blob/main/LICENSE.md)
 [![GitHub Issues or Pull Requests](https://img.shields.io/github/issues/sentienhq/ultralight-s3)](https://github.com/sentienhq/ultralight-s3/issues)
 [![GitHub Repo stars](https://img.shields.io/github/stars/sentienhq/ultralight-s3?style=social)](https://github.com/sentienhq/ultralight-s3)
-[![Contributions welcome](https://img.shields.io/badge/contributions-welcome-brightgreen.svg?style=flat)](https://github.com/sentienhq/ultralight-s3/issues)
+[![Contributions welcome](https://img.shields.io/badge/contributions-welcome-brightgreen.svg?style=flat)](https://github.com/sentienhq/ultralight-s3/issues)[![CodeQL](https://github.com/sentienhq/ultralight-s3/actions/workflows/github-code-scanning/codeql/badge.svg?branch=dev)](https://github.com/sentienhq/ultralight-s3/actions/workflows/github-code-scanning/codeql)
 
-Dev branch:
-[![Test Runner](https://github.com/sentienhq/ultralight-s3/actions/workflows/test-runner.yml/badge.svg)](https://github.com/sentienhq/ultralight-s3/actions/workflows/test-runner.yml)
-[![CodeQL](https://github.com/sentienhq/ultralight-s3/actions/workflows/github-code-scanning/codeql/badge.svg?branch=dev)](https://github.com/sentienhq/ultralight-s3/actions/workflows/github-code-scanning/codeql)
+Dev:
+[![Test Runner](https://github.com/sentienhq/ultralight-s3/actions/workflows/test-runner-cf-dev.yml/badge.svg)](https://github.com/sentienhq/ultralight-s3/actions/workflows/test-runner-cf-dev.yml)
+[![Test Runner](https://github.com/sentienhq/ultralight-s3/actions/workflows/test-runner-minio-dev.yml/badge.svg)](https://github.com/sentienhq/ultralight-s3/actions/workflows/test-runner-minio-dev.yml)
+
+Release:
+[![Test Runner](https://github.com/sentienhq/ultralight-s3/actions/workflows/test-runner-cf-release.yml/badge.svg)](https://github.com/sentienhq/ultralight-s3/actions/workflows/test-runner-cf-release.yml)
+[![Test Runner](https://github.com/sentienhq/ultralight-s3/actions/workflows/test-runner-minio-release.yml/badge.svg)](https://github.com/sentienhq/ultralight-s3/actions/workflows/test-runner-minio-release.yml)
 
 ## Features
 

@@ -1,0 +1,34 @@
+name: Test Runner (dev:Cloudflare)
+
+on:
+  push:
+    branches: [dev]
+  pull_request:
+    branches: [dev]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    env:
+      ENDPOINT: ${{ secrets.ENDPOINT }}
+      REGION: ${{ secrets.REGION }}
+      ACCESS_KEY_ID: ${{ secrets.ACCESS_KEY_ID }}
+      SECRET_ACCESS_KEY: ${{ secrets.SECRET_ACCESS_KEY }}
+      BUCKET_NAME: ${{ secrets.BUCKET_NAME }}
+      TOKEN_VALUE: ${{ secrets.TOKEN_VALUE }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build project
+        run: npm run build
+
+      - name: Run e2e tests
+        run: npm run test:cloudflare:action
