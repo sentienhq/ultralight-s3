@@ -31,7 +31,6 @@ jobs:
         run: npm run build
 
       - name: Create env-cf file
-        secrets: inherit
         with:
           ENDPOINT: ${{ secrets.ENDPOINT }}
           REGION: ${{ secrets.REGION }}
