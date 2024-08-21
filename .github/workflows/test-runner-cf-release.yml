@@ -31,4 +31,16 @@ jobs:
         run: npm run build
 
       - name: Run e2e tests
-        run: npm run test:cloudflare:action
+        uses: nick-fields/retry@v3.0.0
+        with:
+          max_attempts: 3
+          retry_on: any
+          timeout_minutes: 5
+          retry_wait_seconds: 20
+          command: npm run test:cloudflare:action
+        env:
+          ENDPOINT: ${{ secrets.ENDPOINT }}
+          REGION: ${{ secrets.REGION }}
+          ACCESS_KEY_ID: ${{ secrets.ACCESS_KEY_ID }}
+          SECRET_ACCESS_KEY: ${{ secrets.SECRET_ACCESS_KEY }}
+          BUCKET_NAME: ${{ secrets.BUCKET_NAME }}

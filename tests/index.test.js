@@ -9,11 +9,11 @@ import { log } from 'node:console';
 
 let minioTest = true;
 const localTestConfig = {
-  endpoint: env.ENDPOINT || 'http://127.0.0.1:9000',
-  region: env.REGION || 'auto',
-  accessKeyId: env.ACCESS_KEY_ID || 'minio_user',
-  secretAccessKey: env.SECRET_ACCESS_KEY || 'minio_password',
-  bucketName: env.BUCKET_NAME || 'test-bucket',
+  endpoint: env.ENDPOINT || process.env.ENDPOINT || 'http://127.0.0.1:9000',
+  region: env.REGION || process.env.REGION || 'auto',
+  accessKeyId: env.ACCESS_KEY_ID || process.env.ACCESS_KEY_ID || 'minio_user',
+  secretAccessKey: env.SECRET_ACCESS_KEY || process.env.SECRET_ACCESS_KEY || 'minio_password',
+  bucketName: env.BUCKET_NAME || process.env.BUCKET_NAME || 'test-bucket',
 };
 
 let s3;
