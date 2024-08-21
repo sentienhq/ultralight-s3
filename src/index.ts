@@ -382,7 +382,8 @@ class S3 {
       [HEADER_AMZ_CONTENT_SHA256]: UNSIGNED_PAYLOAD,
     };
     const { url, headers: signedHeaders } = await this._sign('HEAD', '', {}, headers, '');
-    const res = await this._sendRequest(url, 'HEAD', signedHeaders);
+    const res = await this._sendRequest(url, 'HEAD', signedHeaders, '', [200, 404, 403]);
+    this._log('error', `Response status: ${(res.status, res.statusText)}`);
     if (res.ok && res.status === 200) {
       return true;
     }
@@ -390,26 +391,25 @@ class S3 {
   }
 
   // TBD
-  // async createBucket(bucketName) {
-  //   const xmlBody = `
-  //   <?xml version="1.0" encoding="UTF-8"?>
-  //     <CreateBucketConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
-  //     <LocationConstraint>${this.region}</LocationConstraint>
-  //   </CreateBucketConfiguration>
-  //   `;
-  //   const headers = {
-  //     [HEADER_CONTENT_TYPE]: XML_CONTENT_TYPE,
-  //     [HEADER_CONTENT_LENGTH]: Buffer.byteLength(xmlBody).toString(),
-  //     [HEADER_AMZ_CONTENT_SHA256]: await _hash(xmlBody),
-  //   };
-  //   const encodedKey = encodeURI(bucketName);
-  //   const { url, headers: signedHeaders } = await this._sign('PUT', encodedKey, {}, headers, '');
-  //   const res = await this._sendRequest(url, 'PUT', signedHeaders);
-  //   if (res.ok && res.status === 200) {
-  //     return true;
-  //   }
-  //   return false;
-  // }
+  async createBucket(): Promise<boolean> {
+    const xmlBody = `
+    <CreateBucketConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/">
+      <LocationConstraint>${this.region}</LocationConstraint>
+    </CreateBucketConfiguration>
+    `;
+    const headers = {
+      [HEADER_CONTENT_TYPE]: XML_CONTENT_TYPE,
+      [HEADER_CONTENT_LENGTH]: Buffer.byteLength(xmlBody).toString(),
+      [HEADER_AMZ_CONTENT_SHA256]: await _hash(xmlBody),
+    };
+    const encodedKey = encodeURI('');
+    const { url, headers: signedHeaders } = await this._sign('PUT', encodedKey, {}, headers, '');
+    const res = await this._sendRequest(url, 'PUT', signedHeaders, xmlBody, [200, 404, 403]);
+    if (res.ok && res.status === 200) {
+      return true;
+    }
+    return false;
+  }
 
   /**
    * Check if a file exists in the bucket.
@@ -444,7 +444,7 @@ class S3 {
   private async _sign(
     method: HttpMethod,
     keyPath: string,
-    query: Object,
+    query: Object = {},
     headers: Record<string, string | number>,
     body: string | Buffer,
   ): Promise<{ url: string; headers: Record<string, any> }> {
@@ -649,9 +649,9 @@ class S3 {
    * Get an object from the bucket.
    * @param {string} key - The key of the object to get.
    * @param {Object} [opts={}] - Additional options for the get operation.
-   * @returns {Promise<string|null>} The content of the object. If the object does not exist, null will be returned.
+   * @returns {Promise<Response | null>} The response of the object. If the object does not exist, null will be returned.
    */
-  async get(key: string, opts: Record<string, any> = {}): Promise<string | null> {
+  async get(key: string, opts: Record<string, any> = {}): Promise<Response | null> {
     this._checkKey(key);
     this._log('info', `Getting object ${key}`);
     const { filteredOpts, conditionalHeaders } = this._filterIfHeaders(opts);
@@ -671,7 +671,7 @@ class S3 {
       this._log('error', `Failed to get object. Status: ${res.status}`);
       throw new Error(`Failed to get object. Status: ${res.status}`);
     }
-    return res.text();
+    return res;
   }
 
   /**
@@ -785,10 +785,10 @@ class S3 {
    * Put an object into the bucket.
    * @param {string} key - The key of the object to put. To create a folder, include a trailing slash.
    * @param {Buffer|string} data - The content of the object to put.
-   * @returns {Promise<Object>} The response from the put operation.
+   * @returns {Promise<Response>} The response from the put operation.
    * @throws {TypeError} If the key is not a non-empty string or data is not a Buffer or string.
    */
-  async put(key: string, data: string | Buffer): Promise<Object> {
+  async put(key: string, data: string | Buffer): Promise<Response> {
     this._checkKey(key);
     if (!(data instanceof Buffer || typeof data === 'string')) {
       this._log('error', ERROR_DATA_BUFFER_REQUIRED);
@@ -802,8 +802,7 @@ class S3 {
     };
     const encodedKey = uriResourceEscape(key);
     const { url, headers: signedHeaders } = await this._sign('PUT', encodedKey, {}, headers, data);
-    const res = await this._sendRequest(url, 'PUT', signedHeaders, data);
-    return res;
+    return this._sendRequest(url, 'PUT', signedHeaders, data, [200]);
   }
 
   /**
@@ -1094,11 +1093,10 @@ class S3 {
       body: ['GET', 'HEAD'].includes(method) ? undefined : body,
       signal: this.requestAbortTimeout !== undefined ? AbortSignal.timeout(this.requestAbortTimeout) : undefined,
     });
-
+    this._log('info', `Response status: ${(res.status, toleratedStatusCodes)}`);
     if (!res.ok && !toleratedStatusCodes.includes(res.status)) {
       await this._handleErrorResponse(res);
     }
-
     return res;
   }
 

@@ -1,8 +1,9 @@
 {
-  "displayName": "ultralight-s3 node tests",
+  "displayName": "ultralight-s3 minio s3 tests",
   "testTimeout": 60000,
   "silent": false,
   "verbose": true,
+  "collectCoverage": false,
   "testEnvironment": "node",
   "setupFilesAfterEnv": ["<rootDir>/tests/setup.js"],
   "globalSetup": "./tests/setup.js",

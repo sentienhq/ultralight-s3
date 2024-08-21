@@ -127,6 +127,20 @@ app.get('/list-uploads', async c => {
   return c.json(s3list);
 });
 
+app.get('/bucket-exists/:bucketName', async c => {
+  const newConfig = { ...configCFS3, bucketName: c.req.param('bucketName') };
+  const s3 = new S3(newConfig);
+  const exists = await s3.bucketExists();
+  return c.json({ success: true, message: 'Bucket exists', exists });
+});
+
+app.get('/create-bucket/:bucketName', async c => {
+  const newConfig = { ...configCFS3, bucketName: c.req.param('bucketName') };
+  const s3 = new S3(newConfig);
+  const exists = await s3.createBucket();
+  return c.json({ success: true, message: 'Bucket created', exists });
+});
+
 app.get('/delete-upload/:key', async c => {
   const s3 = new S3(configCFS3);
   const key = c.req.param('key');

@@ -28,12 +28,15 @@
     "./package.json": "./package.json"
   },
   "scripts": {
-    "prepublishOnly": "npm run build:node && npm run test",
-    "build": "tsc",
-    "build:node": "tsc --module node16 --outDir ./lib/ &&  esbuild lib/index.js --bundle --outfile=lib/index.min.js --platform=node --format=esm --minify --sourcemap",
+    "prepublishOnly": "npm run build && npm run test:all",
+    "build:ts": "tsc",
+    "build": "tsc --module node16 --outDir ./lib/ &&  esbuild lib/index.js --bundle --outfile=lib/index.min.js --platform=node --format=esm --minify --sourcemap",
     "dev:wrangler": "wrangler dev --port 8787",
     "dev:node": "nodemon --watch './src/index.ts' --delay 2.5 -L --verbose --exec 'tsc --module node16 --outDir ./lib/ && node --max-old-space-size=4096 --env-file ./.env ./dev/node-dev.js'",
-    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js --config node.jest.config.json",
+    "test:minio": "node --experimental-vm-modules node_modules/jest/bin/jest.js --config node.jest.config.json",
+    "test:cloudflare": "node --env-file ./.env-cf --experimental-vm-modules node_modules/jest/bin/jest.js --config cloudflare.jest.config.json",
+    "test:cloudflare:action": "node --experimental-vm-modules node_modules/jest/bin/jest.js --config cloudflare.jest.config.json",
+    "test:all": "npm run test:minio && npm run test:cloudflare",
     "clean": "rm -rf lib"
   },
   "files": [

@@ -133,6 +133,7 @@ declare class S3 {
      * @returns {Promise<boolean>} True if the bucket exists, false otherwise.
      */
     bucketExists(): Promise<boolean>;
+    createBucket(): Promise<boolean>;
     /**
      * Check if a file exists in the bucket.
      * @param {string} key - The key of the object.
@@ -173,9 +174,9 @@ declare class S3 {
      * Get an object from the bucket.
      * @param {string} key - The key of the object to get.
      * @param {Object} [opts={}] - Additional options for the get operation.
-     * @returns {Promise<string|null>} The content of the object. If the object does not exist, null will be returned.
+     * @returns {Promise<Response | null>} The response of the object. If the object does not exist, null will be returned.
      */
-    get(key: string, opts?: Record<string, any>): Promise<string | null>;
+    get(key: string, opts?: Record<string, any>): Promise<Response | null>;
     /**
      *
      * @param {string} key - The key of the object to get.
@@ -207,10 +208,10 @@ declare class S3 {
      * Put an object into the bucket.
      * @param {string} key - The key of the object to put. To create a folder, include a trailing slash.
      * @param {Buffer|string} data - The content of the object to put.
-     * @returns {Promise<Object>} The response from the put operation.
+     * @returns {Promise<Response>} The response from the put operation.
      * @throws {TypeError} If the key is not a non-empty string or data is not a Buffer or string.
      */
-    put(key: string, data: string | Buffer): Promise<Object>;
+    put(key: string, data: string | Buffer): Promise<Response>;
     /**
      * Initiate a multipart upload.
      * @param {string} key - The key of the object to upload.

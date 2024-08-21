@@ -1,0 +1,9 @@
+{
+  "displayName": "ultralight-s3 cloudflare s3 tests",
+  "testTimeout": 90000,
+  "silent": false,
+  "verbose": true,
+  "collectCoverage": false,
+  "testEnvironment": "node",
+  "testMatch": ["<rootDir>/tests/*.test.js"]
+}
