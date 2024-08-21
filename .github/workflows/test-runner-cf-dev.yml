@@ -30,16 +30,21 @@ jobs:
       - name: Build project
         run: npm run build
 
+      - name: Create env-cf file
+        run: |
+          touch .env-cf
+          echo ENDPOINT=${{ secrets.ENDPOINT }} >> .env-cf
+          echo REGION=${{ secrets.REGION }} >> .env-cf
+          echo ACCESS_KEY_ID=${{ secrets.ACCESS_KEY_ID }} >> .env-cf
+          echo SECRET_ACCESS_KEY=${{ secrets.SECRET_ACCESS_KEY }} >> .env-cf
+          echo BUCKET_NAME=${{ secrets.BUCKET_NAME }} >> .env-cf
+          echo TOKEN_VALUE=${{ secrets.TOKEN_VALUE }} >> .env-cf
+
       - name: Run e2e tests
         uses: nick-fields/retry@v3.0.0
         with:
-          ENDPOINT: ${{ secrets.ENDPOINT }}
-          REGION: ${{ secrets.REGION }}
-          ACCESS_KEY_ID: ${{ secrets.ACCESS_KEY_ID }}
-          SECRET_ACCESS_KEY: ${{ secrets.SECRET_ACCESS_KEY }}
-          BUCKET_NAME: ${{ secrets.BUCKET_NAME }}
           max_attempts: 3
           retry_on: any
           timeout_minutes: 5
           retry_wait_seconds: 20
-          command: npm run test:cloudflare:action
+          command: npm run test:cloudflare
