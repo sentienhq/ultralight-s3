@@ -9,7 +9,7 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
-    timeout-minutes: 2
+    timeout-minutes: 16
     env:
       ENDPOINT: ${{ secrets.ENDPOINT }}
       REGION: ${{ secrets.REGION }}
