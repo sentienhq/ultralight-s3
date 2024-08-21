@@ -24,13 +24,6 @@ jobs:
         run: npm run build
 
       - name: Create env-cf file
-        env:
-          ENDPOINT: ${{ secrets.ENDPOINT }}
-          REGION: ${{ secrets.REGION }}
-          ACCESS_KEY_ID: ${{ secrets.ACCESS_KEY_ID }}
-          SECRET_ACCESS_KEY: ${{ secrets.SECRET_ACCESS_KEY }}
-          BUCKET_NAME: ${{ secrets.BUCKET_NAME }}
-          TOKEN_VALUE: ${{ secrets.TOKEN_VALUE }}
         run: |
           touch .env-cf
           echo ENDPOINT=${{ secrets.ENDPOINT }} >> .env-cf
