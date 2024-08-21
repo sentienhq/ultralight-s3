@@ -31,7 +31,7 @@ jobs:
         run: npm run build
 
       - name: Create env-cf file
-        with:
+        env:
           ENDPOINT: ${{ secrets.ENDPOINT }}
           REGION: ${{ secrets.REGION }}
           ACCESS_KEY_ID: ${{ secrets.ACCESS_KEY_ID }}
