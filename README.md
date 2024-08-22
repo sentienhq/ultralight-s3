@@ -174,6 +174,7 @@ Not tested, but should work with other S3 compatible services. Full list - soon 
 ### Bucket Operations
 
 - [`bucketExists()`](#bucketexists): Check if a bucket exists.
+- [`createBucket()`](#createbucket): Create a new bucket.
 
 ### Object Operations
 
@@ -360,13 +361,19 @@ Not tested, but should work with other S3 compatible services. Full list - soon 
 - **Behavior**: Aborts a multipart upload.
 - **Returns**: Promise<Object\>: A promise that resolves to the abort response.
 
-<a id="bucketexists"></a>
+<span id="createbucket"></span>
+**createBucket(): Promise<boolean\>**
+
+- **Behavior**: Creates a new bucket.
+- **Returns**: Promise<boolean>: A promise that resolves to a boolean indicating whether the bucket creation was successful.
+
+<span id="bucketexists"></span>
 **bucketExists(): Promise<boolean\>**
 
 - **Behavior**: Checks if the configured bucket exists.
 - **Returns**: Promise<boolean>: A promise that resolves to a boolean indicating whether the bucket exists.
 
-<a id="sanitizeetag"></a>
+<span id="sanitizeetag"></span>
 **sanitizeETag(etag: string): string**
 
 - **Input**: `etag: string`: The ETag to sanitize.
