@@ -50,10 +50,11 @@ import { S3 } from 'ultralight-s3';
 
 // ... your configuration
 const s3 = new S3({
+  endpoint: 'https://your-s3-endpoint.com' || 'http://127.0.0.1:9000',
   accessKeyId: 'your-access-key-id',
   secretAccessKey: 'your-secret-access-key',
+  bucketName: 'your-bucket-name',
   region: 'auto',
-  bucket: 'your-bucket-name',
 });
 
 // List objects
@@ -135,9 +136,9 @@ pnpm add ultralight-s3
 import { S3 } from 'ultralight-s3';
 
 const s3 = new S3({
+  endpoint: 'https://your-s3-endpoint.com' || 'http://127.0.0.1:9000',
   accessKeyId: 'your-access-key-id',
   secretAccessKey: 'your-secret-access-key',
-  endpoint: 'https://your-s3-endpoint.com' || 'http://127.0.0.1:9000',
   bucketName: 'your-bucket-name',
   region: 'auto', //optional -  by default is auto
   maxRequestSizeInBytes: 5242880, // optional - by default is 5MB
@@ -152,9 +153,9 @@ const s3 = new S3({
 import { S3 } from 'ultralight-s3';
 
 const s3 = new S3({
+  endpoint: 'https://your-clouflare-id.r2.cloudflarestorage.com/your-bucket-name',
   accessKeyId: 'your-access-key-id',
   secretAccessKey: 'your-secret-access-key',
-  endpoint: 'https://your-clouflare-id.r2.cloudflarestorage.com/your-bucket-name',
   bucketName: 'your-bucket-name',
   region: 'auto', //optional -  by default is auto
   maxRequestSizeInBytes: 5242880, // optional - by default is 5MB
