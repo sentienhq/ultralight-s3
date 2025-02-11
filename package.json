@@ -79,7 +79,7 @@
     "@hono/node-server": "^1.11.5",
     "@types/jest": "^29.5.12",
     "@types/node": "^20.14.9",
-    "esbuild": "^0.23.0",
+    "esbuild": "^0.25.0",
     "hono": "^4.5.8",
     "jest": "^29.7.0",
     "minio": "^8.0.1",
